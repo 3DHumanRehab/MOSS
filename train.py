@@ -296,7 +296,7 @@ if __name__ == "__main__":
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
-    sys_list = ['-s', 'data/zju_mocap_refine/my_392', '--eval', '--exp_name', 'zju_mocap_refine/my_392_100_pose_correction_lbs_offset_split_clone_merge_prune', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '1200']
+    sys_list = ['-s', 'data/zju_mocap_refine/my_392', '--eval', '--exp_name', 'zju_mocap_refine/my_392_100_pose_correction_lbs_offset_split_clone_merge_prune', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '2000']
     # sys_list = ['-s', 'data/zju_mocap_refine/my_392', '--eval', '--exp_name', 'zju_mocap_refine/my_392_100_pose_correction_lbs_offset_split_clone_merge_prune', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '2800']
     args = parser.parse_args(sys_list)
     # print("====="*88)

@@ -10,10 +10,15 @@
 #
 
 import torch
+from torch import nn
+import torch.nn.functional as F
 import math
 from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 from scene.gaussian_model import GaussianModel
 from utils.sh_utils import eval_sh
+
+
+
 
 def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, return_smpl_rot=False, transforms=None, translation=None):
     """
@@ -59,42 +64,55 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     else:
         if transforms is None:
             # pose offset
-            if True:
-                # Rot + Cam + Shape ==> MLP --> feature 
-                # feature + USR + parent_id ===> MLP ---> rot
-                # concat(rot)==> all rot
+            if False:
                 pose_out = pc.auto_regression(glob = viewpoint_camera.smpl_param['poses'],        # torch.Size([1, 72])
-                                            cam = viewpoint_camera.camera_center[None],           # torch.Size([3])
-                                            shape_params = viewpoint_camera.smpl_param['shapes']) # torch.Size([1, 10])
+                                            ) # torch.Size([1, 10])
                 # pose_out = pc.auto_regression(viewpoint_camera.smpl_param['poses'],       # torch.Size([1, 72])
                 #                               viewpoint_camera.smpl_param['shapes']) # torch.Size([1, 10])
                 # viewpoint_camera.smpl_param['poses']  viewpoint_camera.smpl_param['Th']  torch.Size([3])
                 # correct_Rs = pose_out['Rs'] # torch.Size([1, 23, 3, 3])
                 # pose_out torch.Size([1, 23, 3])
-                dst_posevec =pose_out['Rs'].reshape(1,69)
+                # dst_posevec =pose_out['Rs'].reshape(1,69)
+                correct_Rs =pose_out['Rs'].reshape(1,23,3,3)
                 # torch.Size([1, 69])
-                pose_out = pc.pose_decoder(dst_posevec)
+                # pose_out = pc.pose_decoder(dst_posevec)
+                pose_out = pc.pose_decoder(viewpoint_camera.smpl_param['poses'][:, 3:])
+                correct_Rs += pose_out['Rs']
+            
+            elif True:
+                pose_out = pc.auto_regression(glob = viewpoint_camera.smpl_param['poses'],        # torch.Size([1, 72])
+                                            ) # torch.Size([1, 10])
+                pose_out = pc.pose_decoder(viewpoint_camera.smpl_param['poses'][:, 3:],pose_out['Rs'])
                 correct_Rs = pose_out['Rs']
-                
+            
             else :
                 dst_posevec = viewpoint_camera.smpl_param['poses'][:, 3:]
                 # torch.Size([1, 69])
                 pose_out = pc.pose_decoder(dst_posevec)
                 
                 correct_Rs = pose_out['Rs'] # torch.Size([1, 23, 3, 3])
-            
+
             # SMPL lbs weights
             lbs_weights = pc.lweight_offset_decoder(means3D[None].detach()) #torch.Size([1, 6890, 3])
             lbs_weights = lbs_weights.permute(0,2,1) #torch.Size([1, 6890, 24])
-
+            
+            # lbs_weights_new = lbs_weights.clone()[:,:,1:]
+            
+            # 缺少数据？
+            # lbs_weights += pc.cross_attention(means3D[None],viewpoint_camera.smpl_param['poses'].reshape(1,24,3))
+            # lbs_weights_new = pc.cross_attention(lbs_weights_new,dst_posevec.reshape(1,23,3))
+            # lbs_weights_new = pc.cross_attention(lbs_weights_new,correct_Rs.reshape(1,23,9))
+            
+            # lbs_weights[:,:,1:] = lbs_weights_new
+            
             # transform points
+            # torch.Size([1, 6890, 3])
             _, means3D, _, transforms, translation = pc.coarse_deform_c2source(means3D[None], viewpoint_camera.smpl_param,
                 viewpoint_camera.big_pose_smpl_param,
                 viewpoint_camera.big_pose_world_vertex[None], lbs_weights=lbs_weights, correct_Rs=correct_Rs, return_transl=return_smpl_rot)
         else:
             correct_Rs = None
             means3D = torch.matmul(transforms, means3D[..., None]).squeeze(-1) + translation
-
 
     means3D = means3D.squeeze()
     means2D = screenspace_points

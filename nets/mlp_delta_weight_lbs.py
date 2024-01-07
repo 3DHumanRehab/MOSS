@@ -78,3 +78,4 @@ def get_embedder(multires, input_dims=3):
     return embed, embedder_obj.out_dim
 
 xyz_embedder, xyz_dim = get_embedder(10)
+
