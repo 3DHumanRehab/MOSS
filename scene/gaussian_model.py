@@ -29,15 +29,18 @@ from nets.mlp_delta_weight_lbs import LBSOffsetDecoder
 
 
 #TODO image feature
-#TODO 两个CrossAttention 交换
-class CrossAttention(nn.Module):
+class CrossAttention_lbs(nn.Module):
     def __init__(self, feature_dim=24,mesh_dim = 3,rot_dim = 3, num_heads=3,):
-        super(CrossAttention, self).__init__()
+        super(CrossAttention_lbs, self).__init__()
         self.num_heads = num_heads
         self.feature_dim = feature_dim
         self.query = nn.Linear(mesh_dim, feature_dim)
         self.key = nn.Linear(rot_dim, feature_dim)
         self.value = nn.Linear(rot_dim, feature_dim)
+        self.out_layer = nn.Linear(feature_dim,feature_dim)
+        init_val =1e-5
+        self.out_layer.weight.data.uniform_(-init_val, init_val)
+        self.out_layer.bias.data.zero_()
 
     def forward(self, query, key):
         value = key
@@ -52,6 +55,37 @@ class CrossAttention(nn.Module):
 
         # 应用注意力分数到value上
         output = torch.matmul(attention, V)
+        output = self.out_layer(output)
+
+        return output
+
+class CrossAttention_pos(nn.Module):
+    def __init__(self, feature_dim=9,mesh_dim = 3,rot_dim = 3, num_heads=1):
+        super(CrossAttention_pos, self).__init__()
+        self.num_heads = num_heads
+        self.feature_dim = feature_dim
+        self.query = nn.Linear(rot_dim, feature_dim)   
+        self.key = nn.Linear(mesh_dim, feature_dim)
+        self.value = nn.Linear(mesh_dim, feature_dim)
+        self.out_layer = nn.Linear(feature_dim,feature_dim)
+        init_val = 1e-5
+        self.out_layer.weight.data.uniform_(-init_val, init_val)
+        self.out_layer.bias.data.zero_()
+
+    def forward(self, query, key):
+        value = key
+        # 这里仅为示例，实际应用中可能需要根据query, key, value的实际情况调整维度
+        Q = self.query(query)  # [batch_size, seq_len, feature_dim]
+        K = self.key(key)      # [batch_size, seq_len, feature_dim]
+        V = self.value(value)  # [batch_size, seq_len, feature_dim]
+
+        # 计算注意力分数
+        attention_scores = torch.matmul(Q, K.transpose(-2, -1)) / (self.feature_dim ** 0.5)
+        attention = F.softmax(attention_scores, dim=-1)
+
+        # 应用注意力分数到value上
+        output = torch.matmul(attention, V)
+        output = self.out_layer(output)
 
         return output
 
@@ -61,7 +95,7 @@ class Autoregression(nn.Module):
         super(Autoregression,self).__init__()
         self.device = device
         embed_dim = 128
-        self.num_glob_params = 72
+        self.num_glob_params = 24*3
         self.num_cam_params = 0
         # self.num_cam_params = 3
         # self.num_shape_params= 10
@@ -224,59 +258,7 @@ class Autoregression(nn.Module):
 #                 ancestors_dict[joint] += [immediate_parent] + ancestors_dict[immediate_parent]
 #         return ancestors_dict
 
-#     # def forward(self,shape_params, glob, cam):
-#     def forward_fisher(self,shape_params, glob):
-#         # Pose
-#         embed = self.activation(self.fc_embed(torch.cat([shape_params, glob], dim=1)))  # (bsize, embed dim)
-#         batch_size = embed.shape[0]
-#         pose_F = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
-#         pose_U = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
-#         pose_S = torch.zeros(batch_size, self.num_joints, 3, device=self.device)  # (bsize, 23, 3)
-#         pose_V = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
-#         pose_U_proper = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
-#         pose_S_proper = torch.zeros(batch_size, self.num_joints, 3, device=self.device)  # (bsize, 23, 3)
-#         pose_rotmats_mode = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
-#         for joint in range(self.num_joints):
-#             parents = self.parents_dict[joint]
-#             fc_joint = self.fc_pose[joint]
-#             if len(parents) > 0:
-#                 parents_U_proper = pose_U_proper[:, parents, :, :].view(batch_size, -1)  # (bsize, num parents * 3 * 3)
-#                 parents_S_proper = pose_S_proper[:, parents, :].view(batch_size, -1)  # (bsize, num parents * 3)
-#                 parents_mode = pose_rotmats_mode[:, parents, :, :].view(batch_size, -1)  # (bsize, num parents * 3 * 3)
-
-#                 joint_F = fc_joint(torch.cat([embed, parents_U_proper, parents_S_proper, parents_mode], dim=1)).view(-1, 3, 3)  # (bsize, 3, 3)
-#             else:
-#                 joint_F = fc_joint(embed).view(-1, 3, 3)  # (bsize, 3, 3)
-#             # if self.config.MODEL.DELTA_I:
-#             #     joint_F = joint_F + self.config.MODEL.DELTA_I_WEIGHT * torch.eye(3, device=self.device)[None, :, :].expand_as(joint_F)
-
-#             joint_U, joint_S, joint_V = torch.svd(joint_F.cpu())  # (bsize, 3, 3), (bsize, 3), (bsize, 3, 3)
-#             # I found that SVD is faster on CPU than GPU, but YMMV.
-#             with torch.no_grad():
-#                 det_joint_U, det_joint_V = torch.det(joint_U).to(self.device), torch.det(joint_V).to(self.device)  # (bsize,), (bsize,)
-#             joint_U, joint_S, joint_V = joint_U.to(self.device), joint_S.to(self.device), joint_V.to(self.device)
-
-#             # "Proper" SVD
-#             joint_U_proper = joint_U.clone()
-#             joint_S_proper = joint_S.clone()
-#             joint_V_proper = joint_V.clone()
-#             # Ensure that U_proper and V_proper are rotation matrices (orthogonal with det = 1).
-#             joint_U_proper[:, :, 2] *= det_joint_U.unsqueeze(-1)
-#             joint_S_proper[:, 2] *= det_joint_U * det_joint_V
-#             joint_V_proper[:, :, 2] *= det_joint_V.unsqueeze(-1)
-
-#             joint_rotmat_mode = torch.matmul(joint_U_proper, joint_V_proper.transpose(dim0=-1, dim1=-2))
-
-#             pose_F[:, joint, :, :] = joint_F
-#             pose_U[:, joint, :, :] = joint_U
-#             pose_S[:, joint, :] = joint_S
-#             pose_V[:, joint, :, :] = joint_V
-#             pose_U_proper[:, joint, :, :] = joint_U_proper
-#             pose_S_proper[:, joint, :] = joint_S_proper
-#             pose_rotmats_mode[:, joint, :, :] = joint_rotmat_mode
-#         return {
-#             "Rs": pose_F
-#         }
+     
 
 #     def forward(self, glob):
 #     # def forward_without(self,shape_params,glob):
@@ -344,7 +326,8 @@ class GaussianModel:
             neutral_smpl_path = os.path.join('assets', f'SMPL_{actor_gender.upper()}.pkl')
             self.SMPL_NEUTRAL = SMPL_to_tensor(read_pickle(neutral_smpl_path), device=self.device)
         elif smpl_type == 'smplx':
-            neutral_smpl_path = os.path.join('assets/models/smplx', f'SMPLX_{actor_gender.upper()}.npz')
+            # neutral_smpl_path = os.path.join('assets/models/smplx', f'SMPLX_{actor_gender.upper()}.npz')
+            neutral_smpl_path = "/HOME/HOME/Caixiang/SMPLX_NEUTRAL_2020.npz"
             params_init = dict(np.load(neutral_smpl_path, allow_pickle=True))
             self.SMPL_NEUTRAL = SMPL_to_tensor(params_init, device=self.device)
 
@@ -360,15 +343,18 @@ class GaussianModel:
             self.pose_decoder.to(self.device)
 
             # load lbs weight module
-            self.lweight_offset_decoder = LBSOffsetDecoder(total_bones=total_bones)
-            self.lweight_offset_decoder.to(self.device)
+            self.weight_offset_decoder = LBSOffsetDecoder(total_bones=total_bones)
+            self.weight_offset_decoder.to(self.device)
             
             # auto regression
             self.auto_regression = Autoregression(device=self.device)
             self.auto_regression.to(self.device)
             
-            self.cross_attention = CrossAttention()
-            self.cross_attention.to(self.device)
+            self.cross_attention_lbs = CrossAttention_lbs()
+            self.cross_attention_lbs.to(self.device)
+            
+            self.cross_attention_pos = CrossAttention_pos()
+            self.cross_attention_pos.to(self.device)
 
     def capture(self):
         return (
@@ -385,7 +371,7 @@ class GaussianModel:
             self.optimizer.state_dict(),
             self.spatial_lr_scale,
             self.pose_decoder,
-            self.lweight_offset_decoder,
+            self.weight_offset_decoder,
         )
     
     def restore(self, model_args, training_args):
@@ -402,7 +388,7 @@ class GaussianModel:
         opt_dict, 
         self.spatial_lr_scale,
         self.pose_decoder,
-        self.lweight_offset_decoder) = model_args
+        self.weight_offset_decoder) = model_args
         self.training_setup(training_args)
         self.xyz_gradient_accum = xyz_gradient_accum
         self.denom = denom
@@ -485,10 +471,14 @@ class GaussianModel:
                 {'params': [self._scaling], 'lr': training_args.scaling_lr, "name": "scaling"},
                 {'params': [self._rotation], 'lr': training_args.rotation_lr, "name": "rotation"},
                 {'params': self.pose_decoder.parameters(), 'lr': training_args.pose_refine_lr, "name": "pose_decoder"},
-                {'params': self.lweight_offset_decoder.parameters(), 'lr': training_args.lbs_offset_lr, "name": "lweight_offset_decoder"},
+                {'params': self.auto_regression.parameters(),'lr':training_args.pose_refine_lr,"name":"auto_regression"},
+                {'params': self.weight_offset_decoder.parameters(), 'lr': training_args.lbs_offset_lr, "name": "weight_offset_decoder"},
+                {'params': self.cross_attention_lbs.parameters(), 'lr': 0.0001, "name": "cross_attention_lbs"},
+                {'params': self.cross_attention_pos.parameters(), 'lr': 0.001, "name": "cross_attention_pos"},
             ] 
 
-        self.optimizer = torch.optim.Adam(l, lr=0.0, eps=1e-15)
+        # self.optimizer = torch.optim.Adam(l, lr=0.0, eps=1e-15)
+        self.optimizer = torch.optim.AdamW(l, lr=0.0, eps=1e-15)
         self.xyz_scheduler_args = get_expon_lr_func(lr_init=training_args.position_lr_init*self.spatial_lr_scale,
                                                     lr_final=training_args.position_lr_final*self.spatial_lr_scale,
                                                     lr_delay_mult=training_args.position_lr_delay_mult,

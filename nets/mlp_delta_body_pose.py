@@ -25,9 +25,9 @@ class BodyPoseRefiner(nn.Module):
         # init the weights of the last layer as very small value
         # -- at the beginning, we hope the rotation matrix can be identity 
         init_val = 1e-5
-        # last_layer = self.block_mlps[-1]
-        # last_layer.weight.data.uniform_(-init_val, init_val)
-        # last_layer.bias.data.zero_()
+        last_layer = self.block_mlps[-1]
+        last_layer.weight.data.uniform_(-init_val, init_val)
+        last_layer.bias.data.zero_()
 
         self.rodriguez = RodriguesModule()
         
@@ -36,17 +36,15 @@ class BodyPoseRefiner(nn.Module):
         self.residual_layer.weight.data.uniform_(-init_val, init_val)
         self.residual_layer.bias.data.zero_()
 
-    # def forward(self, pose_input,residual):
-    #     rvec = self.block_mlps(pose_input).view(-1, 3)
-    #     feature = torch.cat(Rs,residual[0].view())
-    #     Rs = self.residual_layer(feature).view(-1, self.total_bones, 3, 3)
-    #     Rs = self.rodriguez(rvec)
+    def forward_origin(self, pose_input):
+        rvec = self.block_mlps(pose_input).view(-1, 3)
+        Rs = self.rodriguez(rvec)
 
-    #     return {
-    #         "Rs": Rs
-    #     }
+        return {
+            "Rs": Rs
+        }
 
-    def forward(self, pose_input,residual):
+    def forward_residual(self, pose_input,residual=None):
         rvec = self.block_mlps(pose_input)
         feature = torch.cat((rvec,residual.view(1,-1)),dim=1)
         feature = self.residual_layer(feature).view(-1, 3)
@@ -55,6 +53,11 @@ class BodyPoseRefiner(nn.Module):
         return {
             "Rs": Rs
         }
+        
+    def forward(self, pose_input,residual=None):
+        if residual!=None:
+            return self.forward_residual(pose_input,residual)
+        return self.forward_origin(pose_input)
 
 ###############################################################################
 ## Init Functions

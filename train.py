@@ -45,15 +45,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     scene = Scene(dataset, gaussians)
     gaussians.training_setup(opt)
     if checkpoint:
-        print("=======================================")
-        print("Load Checkpoint:",checkpoint)
-        print("=======================================")
         (model_params, first_iter) = torch.load(checkpoint)
         gaussians.restore(model_params, opt)
-    else:
-        print("=======================================")
-        print("Without Checkpoint")
-        print("=======================================")
 
     bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
     background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
@@ -291,12 +284,12 @@ if __name__ == "__main__":
     parser.add_argument('--port', type=int, default=6009)
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
-    parser.add_argument("--test_iterations", nargs="+", type=int, default=[1_200, 2_000, 3_000, 7_000, 30_000])
+    parser.add_argument("--test_iterations", nargs="+", type=int, default=[1_200, 2_000, 3_000, 4_000, 30_000])
     parser.add_argument("--save_iterations", nargs="+", type=int, default=[1_200, 2_000, 3_000, 7_000, 30_000])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
-    sys_list = ['-s', 'data/zju_mocap_refine/my_392', '--eval', '--exp_name', 'zju_mocap_refine/my_392_100_pose_correction_lbs_offset_split_clone_merge_prune', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '2000']
+    sys_list = ['-s', 'data/zju_mocap_refine/my_392', '--eval', '--exp_name', 'zju_mocap_refine/my_392_100_pose_correction_lbs_offset_split_clone_merge_prune', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '4000']
     # sys_list = ['-s', 'data/zju_mocap_refine/my_392', '--eval', '--exp_name', 'zju_mocap_refine/my_392_100_pose_correction_lbs_offset_split_clone_merge_prune', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '2800']
     args = parser.parse_args(sys_list)
     # print("====="*88)
