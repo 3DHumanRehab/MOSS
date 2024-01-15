@@ -79,12 +79,12 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
                 pose_out = pc.pose_decoder(viewpoint_camera.smpl_param['poses'][:, 3:])
                 correct_Rs += pose_out['Rs']
             
-            elif False:
-                pose_out = pc.auto_regression(glob = viewpoint_camera.smpl_param['poses'],        # torch.Size([1, 72])
-                                            ) # torch.Size([1, 10])
-                pose_out = pc.pose_decoder(viewpoint_camera.smpl_param['poses'][:, 3:],pose_out['Rs'])
-                correct_Rs = pose_out['Rs']
             elif True:
+                # pose_out = pc.auto_regression(glob = viewpoint_camera.smpl_param['poses'],        # torch.Size([1, 72])
+                                            # ) # torch.Size([1, 10])
+                pose_out = pc.pose_decoder(viewpoint_camera.smpl_param['poses'][:, 3:])
+                correct_Rs = pose_out['Rs']
+            elif False:
                 correct_Rs = pc.cross_attention_pos(viewpoint_camera.smpl_param['poses'][:, 3:].reshape(1,23,3),means3D[None].detach())
                 # pose_out = pc.pose_decoder(viewpoint_camera.smpl_param['poses'][:, 3:],correct_Rs)
                 # correct_Rs = pose_out['Rs']
@@ -96,8 +96,8 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
                 correct_Rs = pose_out['Rs'] # torch.Size([1, 23, 3, 3])
 
             # SMPL lbs weights
-            # lbs_weights = pc.weight_offset_decoder(means3D[None].detach()) #torch.Size([1, 6890, 3])
-            # lbs_weights = lbs_weights.permute(0,2,1) #torch.Size([1, 6890, 24])
+            lbs_weights = pc.weight_offset_decoder(means3D[None].detach()) #torch.Size([1, 6890, 3])
+            lbs_weights = lbs_weights.permute(0,2,1) #torch.Size([1, 6890, 24])
             
             # lbs_weights_new = lbs_weights[:,:,1:].clone()
             
@@ -108,7 +108,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             # lbs_weights_new = pc.cross_attention_lbs(lbs_weights_new,viewpoint_camera.smpl_param['poses'][:, 3:].reshape(1,23,3))
             
             # lbs_weights = torch.cat((lbs_weights[:,:,:1],lbs_weights_new),dim=-1)
-            lbs_weights = pc.cross_attention_lbs(means3D[None].detach(),viewpoint_camera.smpl_param['poses'].reshape(1,24,3))
+            # lbs_weights = pc.cross_attention_lbs(means3D[None].detach(),viewpoint_camera.smpl_param['poses'].reshape(1,24,3))
             
             # transform points
             # torch.Size([1, 6890, 3])

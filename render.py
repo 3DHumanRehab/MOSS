@@ -52,7 +52,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         start_time = time.time() 
         render_output = render(view, gaussians, pipeline, background, transforms=transforms, translation=translation)
         rendering = render_output["render"]
-        
+
         # end time
         end_time = time.time()
         # Calculate elapsed time
@@ -83,7 +83,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         ssims += ssim(rendering, gt).mean().double()
         lpipss += loss_fn_vgg(rendering, gt).mean().double()
 
-    psnrs /= len(views)   
+    psnrs /= len(views)
     ssims /= len(views)
     lpipss /= len(views)  
 

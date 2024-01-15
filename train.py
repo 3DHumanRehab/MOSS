@@ -262,7 +262,7 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
                     tb_writer.add_scalar(config['name'] + '/loss_viewpoint - psnr', psnr_test, iteration)
                     tb_writer.add_scalar(config['name'] + '/loss_viewpoint - ssim', ssim_test, iteration)
                     tb_writer.add_scalar(config['name'] + '/loss_viewpoint - lpips', lpips_test, iteration)
-
+   
         # Store data (serialize)
         save_path = os.path.join(scene.model_path, 'smpl_rot', f'iteration_{iteration}')
         os.makedirs(save_path, exist_ok=True)
