@@ -8,12 +8,12 @@
 #
 # For inquiries contact  george.drettakis@inria.fr
 #
-
-from scene.cameras import Camera
+import torch
 import numpy as np
+from scene.cameras import Camera
+
 from utils.general_utils import PILtoTorch
 from utils.graphics_utils import fov2focal
-
 WARNED = False
 
 def loadCam(args, id, cam_info, resolution_scale):
@@ -85,6 +85,7 @@ def camera_to_JSON(id, camera : Camera):
     pos = W2C[:3, 3]
     rot = W2C[:3, :3]
     serializable_array_2d = [x.tolist() for x in rot]
+
     camera_entry = {
         'id' : id,
         'img_name' : camera.image_name,
@@ -93,6 +94,6 @@ def camera_to_JSON(id, camera : Camera):
         'position': pos.tolist(),
         'rotation': serializable_array_2d,
         'fy' : fov2focal(camera.FovY, camera.height),
-        'fx' : fov2focal(camera.FovX, camera.width)
+        'fx' : fov2focal(camera.FovX, camera.width),
     }
     return camera_entry

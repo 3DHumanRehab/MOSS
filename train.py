@@ -12,7 +12,7 @@
 import os
 import torch
 from random import randint
-from utils.loss_utils import l1_loss, l2_loss, ssim
+from utils.loss_utils import l1_loss, l2_loss, ssim,matrix_fisher_nll
 from gaussian_renderer import render, network_gui #model
 import sys
 from scene import Scene, GaussianModel #Scene为scene自带;GaussianModel为自定义
@@ -60,6 +60,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     mask_loss_for_log = 0.0
     ssim_loss_for_log = 0.0
     lpips_loss_for_log = 0.0
+    nll_loss_for_log = 0.0
     progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
     first_iter += 1
 
@@ -119,9 +120,15 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         ssim_loss = ssim(img_pred, img_gt)
         # lipis loss
         lpips_loss = loss_fn_vgg(img_pred, img_gt).reshape(-1)
+        
+        data = render_pkg['pose_out']
+        pred_F,pred_U,pred_S,pred_V,target_R = data['Rs'],data['pose_U'],data['pose_S'],data['pose_V'],data['target_R'][1:]
+        nll_loss = matrix_fisher_nll(pred_F,pred_U,pred_S,pred_V,target_R)
+        # nll_loss = nll_loss.mean()   # tensor(4.1514e-07)
+        nll_loss = nll_loss.mean()   # tensor(4.1514e-07)
 
         # loss = Ll1 + 0.1 * mask_loss + 0.01 * (1.0 - ssim_loss) + 0.01 * lpips_loss
-        loss = Ll1 + 0.5 * mask_loss + 0.01 * (1.0 - ssim_loss) + 0.01 * lpips_loss
+        loss = Ll1 + 0.5 * mask_loss + 0.01 * (1.0 - ssim_loss) + 0.01 * lpips_loss + 0.01 * nll_loss
         loss.backward()
 
         # end time
@@ -141,8 +148,9 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             mask_loss_for_log = 0.4 * mask_loss.item() + 0.6 * mask_loss_for_log
             ssim_loss_for_log = 0.4 * ssim_loss.item() + 0.6 * ssim_loss_for_log
             lpips_loss_for_log = 0.4 * lpips_loss.item() + 0.6 * lpips_loss_for_log
+            nll_loss_for_log = 0.4 * nll_loss.item() + 0.6 * nll_loss_for_log
             if iteration % 10 == 0:
-                progress_bar.set_postfix({"#pts": gaussians._xyz.shape[0], "Ll1 Loss": f"{Ll1_loss_for_log:.{3}f}", "mask Loss": f"{mask_loss_for_log:.{2}f}",
+                progress_bar.set_postfix({"#pts": gaussians._xyz.shape[0],"nll Loss":f"{nll_loss_for_log:.{3}f}", "Ll1 Loss": f"{Ll1_loss_for_log:.{3}f}", "mask Loss": f"{mask_loss_for_log:.{2}f}",
                                           "ssim": f"{ssim_loss_for_log:.{2}f}", "lpips": f"{lpips_loss_for_log:.{2}f}"})
                 progress_bar.update(10)
             if iteration == opt.iterations:
@@ -303,12 +311,10 @@ if __name__ == "__main__":
     # Initialize system state (RNG)
     safe_state(args.quiet)
     
-
     # Start GUI server, configure and run training
-    network_gui.init(args.ip, args.port)
+    # network_gui.init(args.ip, args.port)
     torch.autograd.set_detect_anomaly(args.detect_anomaly)
     training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from)
 
     # All done
     print("\nTraining complete.")
- 

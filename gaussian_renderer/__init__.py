@@ -78,8 +78,18 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
                 # pose_out = pc.pose_decoder(dst_posevec)
                 pose_out = pc.pose_decoder(viewpoint_camera.smpl_param['poses'][:, 3:])
                 correct_Rs += pose_out['Rs']
-            
             elif True:
+                
+                # pose_out = pc.auto_regression(glob = viewpoint_camera.smpl_param['poses'],        # torch.Size([1, 72])
+                #                             ) # torch.Size([1, 10])
+                pose_out = pc.auto_regression(viewpoint_camera.smpl_param['poses'],       # torch.Size([1, 72])
+                                            #   viewpoint_camera.smpl_param['shapes'],
+                                              ) # torch.Size([1, 10])
+                # viewpoint_camera.smpl_param['poses']  viewpoint_camera.smpl_param['Th']  torch.Size([3])
+                correct_Rs =pose_out['Rs'].reshape(1,23,3,3)
+                pose_out['target_R'] = viewpoint_camera.smpl_param['pose_rotmats']
+                
+            elif False:
                 # pose_out = pc.auto_regression(glob = viewpoint_camera.smpl_param['poses'],        # torch.Size([1, 72])
                                             # ) # torch.Size([1, 10])
                 pose_out = pc.pose_decoder(viewpoint_camera.smpl_param['poses'][:, 3:])
@@ -112,9 +122,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             
             # transform points
             # torch.Size([1, 6890, 3])
-            _, means3D, _, transforms, translation = pc.coarse_deform_c2source(means3D[None], viewpoint_camera.smpl_param,
-                viewpoint_camera.big_pose_smpl_param,
-                viewpoint_camera.big_pose_world_vertex[None], lbs_weights=lbs_weights, correct_Rs=correct_Rs, return_transl=return_smpl_rot)
+            _, means3D, _, transforms, translation = pc.coarse_deform_c2source(means3D[None], viewpoint_camera.smpl_param,viewpoint_camera.big_pose_smpl_param,viewpoint_camera.big_pose_world_vertex[None], lbs_weights=lbs_weights, correct_Rs=correct_Rs, return_transl=return_smpl_rot)
         else:
             correct_Rs = None
             means3D = torch.matmul(transforms, means3D[..., None]).squeeze(-1) + translation
@@ -172,4 +180,5 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             "radii": radii,
             "transforms": transforms,
             "translation": translation,
-            "correct_Rs": correct_Rs,}
+            "correct_Rs": correct_Rs,
+            "pose_out":pose_out}

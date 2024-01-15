@@ -26,9 +26,9 @@ from pathlib import Path
 from plyfile import PlyData, PlyElement
 from utils.sh_utils import SH2RGB
 from scene.gaussian_model import BasicPointCloud
-
 from smpl.smpl_numpy import SMPL
 from smplx.body_models import SMPLX
+from smplx.lbs import batch_rodrigues
 
 from data.dna_rendering.dna_rendering_sample_code.SMCReader import SMCReader
 
@@ -670,6 +670,8 @@ def readCamerasZJUMoCapRefine(path, output_view, white_background, image_scaling
             smpl_param['Th'] = smpl_param['Th'].astype(np.float32)
             smpl_param['shapes'] = smpl_param['shapes'].astype(np.float32)
             smpl_param['poses'] = smpl_param['poses'].astype(np.float32)
+            smpl_param['pose_rotmats'] = batch_rodrigues(torch.tensor(smpl_param['poses']).contiguous().view(-1, 3)).view(24, 3, 3)
+            
 
             # obtain the original bounds for point sampling
             min_xyz = np.min(xyz, axis=0)
@@ -690,7 +692,7 @@ def readCamerasZJUMoCapRefine(path, output_view, white_background, image_scaling
                             smpl_param=smpl_param, world_vertex=xyz, world_bound=world_bound, 
                             big_pose_smpl_param=big_pose_smpl_param, big_pose_world_vertex=big_pose_xyz, 
                             big_pose_world_bound=big_pose_world_bound))
-
+            
             idx += 1
             
     return cam_infos
