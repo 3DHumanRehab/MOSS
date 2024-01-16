@@ -122,7 +122,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         lpips_loss = loss_fn_vgg(img_pred, img_gt).reshape(-1)
         
         data = render_pkg['pose_out']
-        pred_F,pred_U,pred_S,pred_V,target_R = data['Rs'],data['pose_U'],data['pose_S'],data['pose_V'],data['target_R'][1:]
+        # pred_F,pred_U,pred_S,pred_V,target_R = data['Rs'],data['pose_U'],data['pose_S'],data['pose_V'],data['target_R'][1:]
+        pred_F,pred_U,pred_S,pred_V,target_R = data['Rs'],data['pose_U'],data['pose_S'],data['pose_V'],data['target_R']
         nll_loss = matrix_fisher_nll(pred_F,pred_U,pred_S,pred_V,target_R)
         # nll_loss = nll_loss.mean()   # tensor(4.1514e-07)
         nll_loss = nll_loss.mean()   # tensor(4.1514e-07)
@@ -193,7 +194,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             if (iteration in testing_iterations):
                 print("\n[ITER {}] Saving Checkpoint".format(iteration))
                 torch.save((gaussians.capture(), iteration), scene.model_path + "/chkpnt" + str(iteration) + ".pth")
-        
+
 def prepare_output_and_logger(args):    
     if not args.model_path:
         # if os.getenv('OAR_JOB_ID'):

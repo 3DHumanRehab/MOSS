@@ -670,8 +670,14 @@ def readCamerasZJUMoCapRefine(path, output_view, white_background, image_scaling
             smpl_param['Th'] = smpl_param['Th'].astype(np.float32)
             smpl_param['shapes'] = smpl_param['shapes'].astype(np.float32)
             smpl_param['poses'] = smpl_param['poses'].astype(np.float32)
-            smpl_param['pose_rotmats'] = batch_rodrigues(torch.tensor(smpl_param['poses']).contiguous().view(-1, 3)).view(24, 3, 3)
             
+            original_str = f"{i}"
+            json_path = "/root/workspace/Caixiang/GauHuman-main/data/zju_mocap_refine/my_392/easymocap/output-smpl-3d/smpl/"+original_str.zfill(6)+'.json'
+            with open(json_path, 'r') as file:
+                data = json.load(file)
+            smpl_param['pose_rotmats'] = batch_rodrigues(torch.tensor(data['annots'][0]['poses'][0]).contiguous().view(-1, 3)).view(23, 3, 3)
+            
+            # smpl_param['pose_rotmats'] = batch_rodrigues(torch.tensor(smpl_param['poses']).contiguous().view(-1, 3)).view(24, 3, 3)
 
             # obtain the original bounds for point sampling
             min_xyz = np.min(xyz, axis=0)
@@ -694,7 +700,7 @@ def readCamerasZJUMoCapRefine(path, output_view, white_background, image_scaling
                             big_pose_world_bound=big_pose_world_bound))
             
             idx += 1
-            
+
     return cam_infos
 
 def readZJUMoCapRefineInfo(path, white_background, output_path, eval):

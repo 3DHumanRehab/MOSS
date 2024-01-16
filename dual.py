@@ -134,8 +134,6 @@ class Vector(Sequence):
 
 
 
-
-
 #this class will allow a Quaternion to be referenced by wxyz properties or by the 0-3 index
 #Quaternions will be in the form q = (w,x,y,z)
 class Quaternion(Sequence):

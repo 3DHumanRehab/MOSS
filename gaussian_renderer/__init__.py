@@ -82,7 +82,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
                 
                 # pose_out = pc.auto_regression(glob = viewpoint_camera.smpl_param['poses'],        # torch.Size([1, 72])
                 #                             ) # torch.Size([1, 10])
-                pose_out = pc.auto_regression(viewpoint_camera.smpl_param['poses'],       # torch.Size([1, 72])
+                pose_out = pc.auto_regression(viewpoint_camera.smpl_param['poses'][:, 3:],       # torch.Size([1, 72])
                                             #   viewpoint_camera.smpl_param['shapes'],
                                               ) # torch.Size([1, 10])
                 # viewpoint_camera.smpl_param['poses']  viewpoint_camera.smpl_param['Th']  torch.Size([3])
@@ -112,7 +112,8 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             # lbs_weights_new = lbs_weights[:,:,1:].clone()
             
             # 缺少数据？
-            # lbs_weights += pc.cross_attention(means3D[None],viewpoint_camera.smpl_param['poses'].reshape(1,24,3))
+            # lbs_weights = pc.cross_attention_lbs(means3D[None],viewpoint_camera.smpl_param['poses'].reshape(1,24,3))
+            
             # lbs_weights_new = pc.cross_attention_lbs(lbs_weights_new,dst_posevec.reshape(1,23,3))
             # lbs_weights_new = pc.cross_attention_lbs(lbs_weights_new,correct_Rs.reshape(1,23,9))
             # lbs_weights_new = pc.cross_attention_lbs(lbs_weights_new,viewpoint_camera.smpl_param['poses'][:, 3:].reshape(1,23,3))
