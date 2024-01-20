@@ -38,6 +38,9 @@ We recommend using anaconda to manage the python environments.
     pip install submodules/diff-gaussian-rasterization
     pip install submodules/simple-knn
     pip install --upgrade https://github.com/unlimblue/KNN_CUDA/releases/download/0.2/KNN_CUDA-0.2-py3-none-any.whl
+
+
+    
     pip install -r requirement.txt
 ```
 

@@ -16,6 +16,7 @@ from typing import NamedTuple
 from scene.colmap_loader import read_extrinsics_text, read_intrinsics_text, qvec2rotmat, \
     read_extrinsics_binary, read_intrinsics_binary, read_points3D_binary, read_points3D_text
 from utils.graphics_utils import getWorld2View2, focal2fov, fov2focal
+
 import numpy as np
 import torch
 import json
@@ -532,7 +533,7 @@ def get_camera_extrinsics_zju_mocap_refine(view_index, val=False, camera_view_nu
         return _viewMatrix
     
     def fix_eye(phi, theta):
-        camera_distance = 3
+        camera_distance = 2
         return np.array([
             camera_distance * np.sin(theta) * np.cos(phi),
             camera_distance * np.sin(theta) * np.sin(phi),
@@ -550,6 +551,9 @@ def readCamerasZJUMoCapRefine(path, output_view, white_background, image_scaling
     cam_infos = []
 
     pose_start = 0
+    
+    # Highlight
+    
     if split == 'train':
         pose_interval = 5
         pose_num = 100
@@ -558,6 +562,15 @@ def readCamerasZJUMoCapRefine(path, output_view, white_background, image_scaling
         pose_interval = 30
         pose_num = 17
 
+    # if split == 'train':
+    #     pose_interval = 5
+    #     pose_num = 1
+    # elif split == 'test':
+    #     pose_start = 0
+    #     pose_interval = 30
+    #     pose_num = 1
+
+    #./my_392/annots.npy
     ann_file = os.path.join(path, 'annots.npy')
     annots = np.load(ann_file, allow_pickle=True).item()
     cams = annots['cams']
@@ -672,7 +685,7 @@ def readCamerasZJUMoCapRefine(path, output_view, white_background, image_scaling
             smpl_param['poses'] = smpl_param['poses'].astype(np.float32)
             
             original_str = f"{i}"
-            json_path = "/root/workspace/Caixiang/GauHuman-main/data/zju_mocap_refine/my_392/easymocap/output-smpl-3d/smpl/"+original_str.zfill(6)+'.json'
+            json_path = path+"/easymocap/output-smpl-3d/smpl/"+original_str.zfill(6)+'.json'
             with open(json_path, 'r') as file:
                 data = json.load(file)
             smpl_param['pose_rotmats'] = batch_rodrigues(torch.tensor(data['annots'][0]['poses'][0]).contiguous().view(-1, 3)).view(23, 3, 3)
@@ -689,7 +702,7 @@ def readCamerasZJUMoCapRefine(path, output_view, white_background, image_scaling
             # get bounding mask and bcakground mask
             bound_mask = get_bound_2d_mask(world_bound, K, w2c[:3], image.size[1], image.size[0])
             bound_mask = Image.fromarray(np.array(bound_mask*255.0, dtype=np.byte))
-
+            
             bkgd_mask = Image.fromarray(np.array(msk*255.0, dtype=np.byte))
 
             cam_infos.append(CameraInfo(uid=idx, pose_id=pose_index, R=R, T=T, K=K, FovY=FovY, FovX=FovX, image=image,

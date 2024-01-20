@@ -19,7 +19,6 @@ from utils.sh_utils import eval_sh
 
 
 
-
 def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, return_smpl_rot=False, transforms=None, translation=None):
     """
     Render the scene. 
@@ -52,75 +51,57 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         prefiltered=False,
         debug=pipe.debug
     )
-
     rasterizer = GaussianRasterizer(raster_settings=raster_settings)
     means3D = pc.get_xyz
-
+    pose_out = None
     if not pc.motion_offset_flag:
         _, means3D, _, transforms, _ = pc.coarse_deform_c2source(means3D[None], 
             viewpoint_camera.smpl_param,
-            viewpoint_camera.big_pose_smpl_param,
+            viewpoint_camera.big_pose_smpl1_param,
             viewpoint_camera.big_pose_world_vertex[None])
+        
     else:
         if transforms is None:
             # pose offset
-            if False:
-                pose_out = pc.auto_regression(glob = viewpoint_camera.smpl_param['poses'],        # torch.Size([1, 72])
-                                            ) # torch.Size([1, 10])
-                # pose_out = pc.auto_regression(viewpoint_camera.smpl_param['poses'],       # torch.Size([1, 72])
-                #                               viewpoint_camera.smpl_param['shapes']) # torch.Size([1, 10])
-                # viewpoint_camera.smpl_param['poses']  viewpoint_camera.smpl_param['Th']  torch.Size([3])
-                # correct_Rs = pose_out['Rs'] # torch.Size([1, 23, 3, 3])
-                # pose_out torch.Size([1, 23, 3])
-                # dst_posevec =pose_out['Rs'].reshape(1,69)
-                correct_Rs =pose_out['Rs'].reshape(1,23,3,3)
-                # torch.Size([1, 69])
-                # pose_out = pc.pose_decoder(dst_posevec)
-                pose_out = pc.pose_decoder(viewpoint_camera.smpl_param['poses'][:, 3:])
-                correct_Rs += pose_out['Rs']
-            elif True:
-                
-                # pose_out = pc.auto_regression(glob = viewpoint_camera.smpl_param['poses'],        # torch.Size([1, 72])
-                #                             ) # torch.Size([1, 10])
-                pose_out = pc.auto_regression(viewpoint_camera.smpl_param['poses'][:, 3:],       # torch.Size([1, 72])
-                                            #   viewpoint_camera.smpl_param['shapes'],
-                                              ) # torch.Size([1, 10])
-                # viewpoint_camera.smpl_param['poses']  viewpoint_camera.smpl_param['Th']  torch.Size([3])
-                correct_Rs =pose_out['Rs'].reshape(1,23,3,3)
-                pose_out['target_R'] = viewpoint_camera.smpl_param['pose_rotmats']
-                
-            elif False:
-                # pose_out = pc.auto_regression(glob = viewpoint_camera.smpl_param['poses'],        # torch.Size([1, 72])
-                                            # ) # torch.Size([1, 10])
+            # highlight
+            if True:
+                if False:
+                    pose_out = pc.auto_regression(glob = viewpoint_camera.smpl_param['poses'],)        # torch.Size([1, 72])
+
+                    correct_Rs =pose_out['Rs'].reshape(1,23,3,3)
+                    # torch.Size([1, 69])
+                    # pose_out = pc.pose_decoder(dst_posevec)
+                    pose_out = pc.pose_decoder(viewpoint_camera.smpl_param['poses'][:, 3:])
+                    correct_Rs += pose_out['Rs']
+                elif True:
+                    
+                    pose_out = pc.auto_regression(viewpoint_camera.smpl_param['poses'],)       # torch.Size([1, 72])
+                    correct_Rs =pose_out['Rs'].reshape(1,23,3,3)
+                    pose_out['target_R'] = viewpoint_camera.smpl_param['pose_rotmats']
+                    
+                elif False:
+                    # pose_out = pc.auto_regression(glob = viewpoint_camera.smpl_param['poses'],        # torch.Size([1, 72])
+                                                # ) # torch.Size([1, 10])
+                    pose_out = pc.pose_decoder(viewpoint_camera.smpl_param['poses'][:, 3:])
+                    correct_Rs = pose_out['Rs']
+                elif False:
+                    correct_Rs = pc.cross_attention_pos(viewpoint_camera.smpl_param['poses'][:, 3:].reshape(1,23,3),means3D[None].detach())
+                    # pose_out = pc.pose_decoder(viewpoint_camera.smpl_param['poses'][:, 3:],correct_Rs)
+                    # correct_Rs = pose_out['Rs']
+                else :
+                    dst_posevec = viewpoint_camera.smpl_param['poses'][:, 3:]
+                    # torch.Size([1, 69])
+                    pose_out = pc.pose_decoder(dst_posevec)
+                    
+                    correct_Rs = pose_out['Rs'] # torch.Size([1, 23, 3, 3])
+
+                lbs_weights = pc.cross_attention_lbs(means3D[None],viewpoint_camera.smpl_param['poses'].reshape(1,24,3))
+            else:
                 pose_out = pc.pose_decoder(viewpoint_camera.smpl_param['poses'][:, 3:])
                 correct_Rs = pose_out['Rs']
-            elif False:
-                correct_Rs = pc.cross_attention_pos(viewpoint_camera.smpl_param['poses'][:, 3:].reshape(1,23,3),means3D[None].detach())
-                # pose_out = pc.pose_decoder(viewpoint_camera.smpl_param['poses'][:, 3:],correct_Rs)
-                # correct_Rs = pose_out['Rs']
-            else :
-                dst_posevec = viewpoint_camera.smpl_param['poses'][:, 3:]
-                # torch.Size([1, 69])
-                pose_out = pc.pose_decoder(dst_posevec)
-                
-                correct_Rs = pose_out['Rs'] # torch.Size([1, 23, 3, 3])
+                lbs_weights = pc.weight_offset_decoder(means3D[None].detach()) #torch.Size([1, 6890, 3])
+                lbs_weights = lbs_weights.permute(0,2,1) #torch.Size([1, 6890, 24])
 
-            # SMPL lbs weights
-            lbs_weights = pc.weight_offset_decoder(means3D[None].detach()) #torch.Size([1, 6890, 3])
-            lbs_weights = lbs_weights.permute(0,2,1) #torch.Size([1, 6890, 24])
-            
-            # lbs_weights_new = lbs_weights[:,:,1:].clone()
-            
-            # 缺少数据？
-            # lbs_weights = pc.cross_attention_lbs(means3D[None],viewpoint_camera.smpl_param['poses'].reshape(1,24,3))
-            
-            # lbs_weights_new = pc.cross_attention_lbs(lbs_weights_new,dst_posevec.reshape(1,23,3))
-            # lbs_weights_new = pc.cross_attention_lbs(lbs_weights_new,correct_Rs.reshape(1,23,9))
-            # lbs_weights_new = pc.cross_attention_lbs(lbs_weights_new,viewpoint_camera.smpl_param['poses'][:, 3:].reshape(1,23,3))
-            
-            # lbs_weights = torch.cat((lbs_weights[:,:,:1],lbs_weights_new),dim=-1)
-            # lbs_weights = pc.cross_attention_lbs(means3D[None].detach(),viewpoint_camera.smpl_param['poses'].reshape(1,24,3))
-            
             # transform points
             # torch.Size([1, 6890, 3])
             _, means3D, _, transforms, translation = pc.coarse_deform_c2source(means3D[None], viewpoint_camera.smpl_param,viewpoint_camera.big_pose_smpl_param,viewpoint_camera.big_pose_world_vertex[None], lbs_weights=lbs_weights, correct_Rs=correct_Rs, return_transl=return_smpl_rot)
@@ -128,9 +109,9 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             correct_Rs = None
             means3D = torch.matmul(transforms, means3D[..., None]).squeeze(-1) + translation
 
-    means3D = means3D.squeeze()
-    means2D = screenspace_points
-    opacity = pc.get_opacity
+    means3D = means3D.squeeze()  # torch.Size([6890, 3])
+    means2D = screenspace_points  # torch.Size([6890, 3])
+    opacity = pc.get_opacity       # torch.Size([6890, 1])
 
     # If precomputed 3d covariance is provided, use it. If not, then it will be computed from
     # scaling / rotation by the rasterizer.
@@ -146,6 +127,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
 
     # If precomputed colors are provided, use them. Otherwise, if it is desired to precompute colors
     # from SHs in Python, do it. If not, then SH -> RGB conversion will be done by rasterizer.
+    
     shs = None
     colors_precomp = None
     if override_color is None:
@@ -182,4 +164,5 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             "transforms": transforms,
             "translation": translation,
             "correct_Rs": correct_Rs,
-            "pose_out":pose_out}
+            "pose_out":pose_out,
+            "means3D":means3D}

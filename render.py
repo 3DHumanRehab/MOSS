@@ -31,6 +31,9 @@ loss_fn_vgg = lpips.LPIPS(net='vgg').to(torch.device('cuda', torch.cuda.current_
 def render_set(model_path, name, iteration, views, gaussians, pipeline, background):
     render_path = os.path.join(model_path, name, "ours_{}".format(iteration), "renders")
     gts_path = os.path.join(model_path, name, "ours_{}".format(iteration), "gt")
+    ply_path = os.path.join(model_path, name, "ours_{}".format(iteration), "ply")
+    depth_path = os.path.join(model_path, name, "ours_{}".format(iteration), "depth")
+    alpha_path = os.path.join(model_path, name, "ours_{}".format(iteration), "alpha")
 
     makedirs(render_path, exist_ok=True)
     makedirs(gts_path, exist_ok=True)
@@ -42,14 +45,22 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     rgbs = []
     rgbs_gt = []
     elapsed_time = 0
+    # import copy
+    # temp_view = copy.deepcopy(views[0])
 
-    for _, view in enumerate(tqdm(views, desc="Rendering progress")):
+    for index, view in enumerate(tqdm(views, desc="Rendering progress")):
         gt = view.original_image[0:3, :, :].cuda()
         bound_mask = view.bound_mask
         transforms, translation = smpl_rot[name][view.pose_id]['transforms'], smpl_rot[name][view.pose_id]['translation']
-
+        
+        # new_view = views[1]
+        # view.FoVx = new_view.FoVx
+        # view.FoVy = new_view.FoVy
+        # view.world_view_transform = new_view.world_view_transform
+        # view.full_proj_transform = new_view.full_proj_transform
+        # view.camera_center = new_view.camera_center
         # Start timer
-        start_time = time.time() 
+        start_time = time.time()
         render_output = render(view, gaussians, pipeline, background, transforms=transforms, translation=translation)
         rendering = render_output["render"]
 
@@ -62,6 +73,10 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
 
         rgbs.append(rendering)
         rgbs_gt.append(gt)
+        if not index//10:
+            gaussians.save_ply_with_mesh(os.path.join(ply_path, '{0:05d}'.format(index) + ".ply"),render_output["means3D"])
+            gaussians.save_tensor(os.path.join(depth_path, '{0:05d}'.format(index) + ".png"),render_output["render_depth"])
+            gaussians.save_tensor(os.path.join(alpha_path, '{0:05d}'.format(index) + ".png"),render_output["render_alpha"],)
 
     # Calculate elapsed time
     print("Elapsed time: ", elapsed_time, " FPS: ", len(views)/elapsed_time) 
@@ -85,10 +100,10 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
 
     psnrs /= len(views)
     ssims /= len(views)
-    lpipss /= len(views)  
+    lpipss /= len(views)
 
     # evalution metrics
-    print("\n[ITER {}] Evaluating {} #{}: PSNR {} SSIM {} LPIPS {}".format(iteration, name, len(views), psnrs, ssims*100, lpipss*100))
+    print("\n[ITER {}] Evaluating {} #{}: PSNR {} SSIM {} LPIPS {}".format(iteration, name, len(views), psnrs, ssims, lpipss*1000))
 
 def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParams, skip_train : bool, skip_test : bool):
     with torch.no_grad():
@@ -114,7 +129,33 @@ if __name__ == "__main__":
     parser.add_argument("--skip_test", action="store_true")
     parser.add_argument("--quiet", action="store_true")
     args = get_combined_args(parser)
+
+    args.actor_gender='neutral'
+    args.compute_cov3D_python=True
+    args.convert_SHs_python=False
+    args.data_device='cuda'
+    args.debug=False
+    args.eval=True
+    args.data_name = '392'
+    args.exp_name=f'zju_mocap_refine/my_{args.data_name}_100_pose_correction_lbs_offset_split_clone_merge_prune'
+    args.images='images'
+    args.iteration='3000'
+    # args.iteration='1200'
+    args.model_path=f'output/zju_mocap_refine/my_{args.data_name}_100_pose_correction_lbs_offset_split_clone_merge_prune'
+    args.motion_offset_flag=True
+    args.quiet=False
+    args.resolution=-1
+    args.sh_degree=3
+    args.skip_test=False
+    args.skip_train=True
+    args.smpl_type='smpl'
+    args.source_path=f'/HOME/HOME/data/ZJU-MoCap/my_{args.data_name}'
+    args.white_background=False
+
+    print("=====================================")
     print("Rendering " + args.model_path)
+    print(args)
+    print("=====================================")
 
     # Initialize system state (RNG)
     safe_state(args.quiet)

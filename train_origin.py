@@ -121,15 +121,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # lipis loss
         lpips_loss = loss_fn_vgg(img_pred, img_gt).reshape(-1)
 
-        data = render_pkg['pose_out']
-        # pred_F,pred_U,pred_S,pred_V,target_R = data['Rs'],data['pose_U'],data['pose_S'],data['pose_V'],data['target_R'][1:]
-        pred_F,pred_U,pred_S,pred_V,target_R = data['Rs'],data['pose_U'],data['pose_S'],data['pose_V'],data['target_R']
-        nll_loss = matrix_fisher_nll(pred_F,pred_U,pred_S,pred_V,target_R)
-        # nll_loss = nll_loss.mean()   # tensor(4.1514e-07)
-        nll_loss = nll_loss.mean()   # tensor(4.1514e-07)
-
         # loss = Ll1 + 0.1 * mask_loss + 0.01 * (1.0 - ssim_loss) + 0.01 * lpips_loss
-        loss = Ll1 + 0.5 * mask_loss + 0.01 * (1.0 - ssim_loss) + 0.01 * lpips_loss + 0.01 * nll_loss
+        loss = Ll1 + 0.5 * mask_loss + 0.01 * (1.0 - ssim_loss) + 0.01 * lpips_loss 
         loss.backward()
 
         # end time
@@ -149,9 +142,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             mask_loss_for_log = 0.4 * mask_loss.item() + 0.6 * mask_loss_for_log
             ssim_loss_for_log = 0.4 * ssim_loss.item() + 0.6 * ssim_loss_for_log
             lpips_loss_for_log = 0.4 * lpips_loss.item() + 0.6 * lpips_loss_for_log
-            nll_loss_for_log = 0.4 * nll_loss.item() + 0.6 * nll_loss_for_log
             if iteration % 10 == 0:
-                progress_bar.set_postfix({"#pts": gaussians._xyz.shape[0],"nll Loss":f"{nll_loss_for_log:.{3}f}", "Ll1 Loss": f"{Ll1_loss_for_log:.{3}f}", "mask Loss": f"{mask_loss_for_log:.{2}f}",
+                progress_bar.set_postfix({"#pts": gaussians._xyz.shape[0], "Ll1 Loss": f"{Ll1_loss_for_log:.{3}f}", "mask Loss": f"{mask_loss_for_log:.{2}f}",
                                           "ssim": f"{ssim_loss_for_log:.{2}f}", "lpips": f"{lpips_loss_for_log:.{2}f}"})
                 progress_bar.update(10)
             if iteration == opt.iterations:
@@ -192,6 +184,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             if (iteration in testing_iterations):
                 print("\n[ITER {}] Saving Checkpoint".format(iteration))
                 torch.save((gaussians.capture(), iteration), scene.model_path + "/chkpnt" + str(iteration) + ".pth")
+
 
     
 def prepare_output_and_logger(args):
@@ -290,6 +283,7 @@ if __name__ == "__main__":
     pp = PipelineParams(parser)
     parser.add_argument('--ip', type=str, default="127.0.0.1")
     parser.add_argument('--port', type=int, default=6009)
+    # parser.add_argument('--name', type=str, default='392')
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
     parser.add_argument("--test_iterations", nargs="+", type=int, default=[1_200, 2_000, 3_000, 4_000, 30_000])
@@ -298,10 +292,11 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
     # sys_list = ['-s', '/root/workspace/Caixiang/GauHuman-main/my_392', '--eval', '--exp_name', 'zju_mocap_refine/my_392_100_pose_correction_lbs_offset_split_clone_merge_prune', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '2000']
+    # name_list = ['392']
     name_list = ['387','392','393','394']
     for name in name_list:
         print("Train on",name)
-        sys_list = ['-s', f'/HOME/HOME/data/ZJU-MoCap/my_{name}', '--eval', '--exp_name', f'zju_mocap_refine/my_{name}_Fisher_CA', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '4000']
+        sys_list = ['-s', f'/HOME/HOME/data/ZJU-MoCap/my_{name}', '--eval', '--exp_name', f'zju_mocap_refine/my_{name}_baseline', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '1200']
         args = parser.parse_args(sys_list)
         # print("====="*88)
         # print('sys.argv[1:]',sys.argv[1:])

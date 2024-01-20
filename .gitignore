@@ -8,4 +8,13 @@ tensorboard_3d
 screenshots
 assets/
 *.png
+*.jpg
+*.obj
+*.pth
+*.pt
+*.ply
+*.json
+*.mtl
 data/
+output/
+my_392/

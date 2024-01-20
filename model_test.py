@@ -21,6 +21,7 @@ class Autoregression(nn.Module):
 
         # init the weights of the last layer as very small value
         # -- at the beginning, we hope the rotation matrix can be identity 
+        
         init_val = 1e-5
         last_layer = self.block_mlps[-1]
         last_layer.weight.data.uniform_(-init_val, init_val)
