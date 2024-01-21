@@ -73,7 +73,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
 
         rgbs.append(rendering)
         rgbs_gt.append(gt)
-        if not index//10:
+        if not index%10:
             gaussians.save_ply_with_mesh(os.path.join(ply_path, '{0:05d}'.format(index) + ".ply"),render_output["means3D"])
             gaussians.save_tensor(os.path.join(depth_path, '{0:05d}'.format(index) + ".png"),render_output["render_depth"])
             gaussians.save_tensor(os.path.join(alpha_path, '{0:05d}'.format(index) + ".png"),render_output["render_alpha"],)
@@ -103,7 +103,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     lpipss /= len(views)
 
     # evalution metrics
-    print("\n[ITER {}] Evaluating {} #{}: PSNR {} SSIM {} LPIPS {}".format(iteration, name, len(views), psnrs, ssims, lpipss*1000))
+    print("\n[ITER {}] Evaluating {} #{}: PSNR {} SSIM {} LPIPS {}".format(iteration, name, len(views), psnrs, ssims*100, lpipss*1000))
 
 def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParams, skip_train : bool, skip_test : bool):
     with torch.no_grad():
@@ -137,11 +137,14 @@ if __name__ == "__main__":
     args.debug=False
     args.eval=True
     args.data_name = '392'
-    args.exp_name=f'zju_mocap_refine/my_{args.data_name}_100_pose_correction_lbs_offset_split_clone_merge_prune'
+    if False:
+        args.exp_name=f'zju_mocap_refine/my_{args.data_name}_baseline'
+        args.iteration='1200'
+    else:
+        args.exp_name=f'zju_mocap_refine/my_{args.data_name}_Fisher_CA'
+        args.iteration='3000'
     args.images='images'
-    args.iteration='3000'
-    # args.iteration='1200'
-    args.model_path=f'output/zju_mocap_refine/my_{args.data_name}_100_pose_correction_lbs_offset_split_clone_merge_prune'
+    args.model_path=f'output/{args.exp_name}'
     args.motion_offset_flag=True
     args.quiet=False
     args.resolution=-1

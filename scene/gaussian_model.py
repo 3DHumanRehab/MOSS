@@ -23,235 +23,164 @@ from utils.sh_utils import RGB2SH
 from simple_knn._C import distCUDA2
 from utils.graphics_utils import BasicPointCloud
 from utils.general_utils import strip_symmetric, build_scaling_rotation
-from utils.graphics_utils import getWorld2View2, getProjectionMatrix, getProjectionMatrix_refine
 from knn_cuda import KNN
 import pickle
-from PIL import Image
 import torch.nn.functional as F
 # from gaussian_renderer import render
 from nets.mlp_delta_body_pose import BodyPoseRefiner
-from nets.mlp_delta_weight_lbs import LBSOffsetDecoder
-from cam_utils import orbit_camera, OrbitCamera
-from gs_renderer import gaussian_3d_coeff
+from nets.mlp_delta_weight_lbs import LBSOffsetDecoder,CrossAttention_lbs
 from grid_put import mipmap_linear_grid_put_2d
-from mesh import Mesh, safe_normalize
-from mesh_utils import decimate_mesh, clean_mesh
-from gs_renderer import Renderer, MiniCam
 
-#TODO image feature
-class CrossAttention_lbs(nn.Module):
-    def __init__(self, feature_dim=24,mesh_dim = 3,rot_dim = 3, num_heads=3,):
-        super(CrossAttention_lbs, self).__init__()
-        self.num_heads = num_heads
-        self.feature_dim = feature_dim
-        self.query = nn.Linear(mesh_dim, feature_dim)
-        self.key = nn.Linear(rot_dim, feature_dim)
-        self.value = nn.Linear(rot_dim, feature_dim)
-        self.out_layer = nn.Linear(feature_dim,feature_dim)
-        init_val =1e-5
-        self.out_layer.weight.data.uniform_(-init_val, init_val)
-        self.out_layer.bias.data.zero_()
 
-    def forward(self, query, key):
-        value = key
-        # 这里仅为示例，实际应用中可能需要根据query, key, value的实际情况调整维度
-        Q = self.query(query)  # [batch_size, seq_len, feature_dim]
-        K = self.key(key)      # [batch_size, seq_len, feature_dim]
-        V = self.value(value)  # [batch_size, seq_len, feature_dim]
+# Highlight_autoregression
 
-        # 计算注意力分数
-        attention_scores = torch.matmul(Q, K.transpose(-2, -1)) / (self.feature_dim ** 0.5)
-        attention = F.softmax(attention_scores, dim=-1)
+class Autoregression(nn.Module):
+    def __init__(self,device='cuda'):
+        super(Autoregression,self).__init__()
+        self.device = device
+        mlp_depth=2
+        self.num_joints = 23
+        embedding_size = 69
+        # mlp_width = 128+9 * self.num_joints
+        mlp_width = 128
+        block_mlps = [nn.Linear(embedding_size, mlp_width), nn.ReLU()]
+        
+        for _ in range(0, mlp_depth-1):
+            block_mlps += [nn.Linear(mlp_width, mlp_width), nn.ReLU()]
 
-        # 应用注意力分数到value上
-        output = torch.matmul(attention, V)
-        output = self.out_layer(output)
+        block_mlps += [nn.Linear(mlp_width, 3 * self.num_joints)] 
 
-        return output
+        self.block_mlps = nn.Sequential(*block_mlps)
 
-class CrossAttention_pos(nn.Module):
-    def __init__(self, feature_dim=9,mesh_dim = 3,rot_dim = 3, num_heads=1):
-        super(CrossAttention_pos, self).__init__()
-        self.num_heads = num_heads
-        self.feature_dim = feature_dim
-        self.query = nn.Linear(rot_dim, feature_dim)
-        self.key = nn.Linear(mesh_dim, feature_dim)
-        self.value = nn.Linear(mesh_dim, feature_dim)
-        self.out_layer = nn.Linear(feature_dim,feature_dim)
+        # init the weights of the last layer as very small value
+        # -- at the beginning, we hope the rotation matrix can be identity 
         init_val = 1e-5
-        self.out_layer.weight.data.uniform_(-init_val, init_val)
-        self.out_layer.bias.data.zero_()
+        last_layer = self.block_mlps[-1]
+        last_layer.weight.data.uniform_(-init_val, init_val)
+        last_layer.bias.data.zero_()
+        self.rodriguez = RodriguesModule()
+        
+        
+    def forward(self,feature):
+        joint_F = self.block_mlps(feature[:, 3:]).view(-1, 3)  # (Joints, 3, 3)
+        joint_F = self.rodriguez(joint_F)
 
-    def forward(self, query, key):
-        value = key
-        # 这里仅为示例，实际应用中可能需要根据query, key, value的实际情况调整维度
-        Q = self.query(query)  # [batch_size, seq_len, feature_dim]
-        K = self.key(key)      # [batch_size, seq_len, feature_dim]
-        V = self.value(value)  # [batch_size, seq_len, feature_dim]
+        joint_U, joint_S, joint_V = torch.svd(joint_F)  # (Joints, 3, 3), (Joints, 3), (Joints, 3, 3)
 
-        # 计算注意力分数
-        attention_scores = torch.matmul(Q, K.transpose(-2, -1)) / (self.feature_dim ** 0.5)
-        attention = F.softmax(attention_scores, dim=-1)
-
-        # 应用注意力分数到value上
-        output = torch.matmul(attention, V)
-        output = self.out_layer(output)
-
-        return output
+        return {
+            "Rs": joint_F,
+            "pose_U":joint_U,
+            "pose_S":joint_S,
+            "pose_V":joint_V,
+        }
 
 
-# Highlight
 
-if False:
-    class Autoregression(nn.Module):
-        def __init__(self,device='cuda'):
-            super(Autoregression,self).__init__()
-            self.device = device
-            embed_dim = 64
-            self.num_glob_params = 24*3
-            self.num_cam_params = 0
-            # self.num_cam_params = 3
-            # self.num_shape_params= 10
-            self.num_shape_params= 0
-            self.joint_dim = 9  # 3
-            self.parents_dict = self.immediate_parent_to_all_ancestors() # SMPL.parents.tolist()
-            self.fc_embed = nn.Linear(self.num_shape_params  + self.num_glob_params + self.num_cam_params,
-                                    embed_dim)
-            self.activation = nn.ELU()
-            self.num_joints = 23
+class Autoregression_autoregression(nn.Module):
+    def __init__(self,device='cuda'):
+        super(Autoregression_autoregression,self).__init__()
+        self.device = device
+        embed_dim = 64
+        self.num_glob_params = 24*3
+        self.num_cam_params = 0
+        # self.num_cam_params = 3
+        # self.num_shape_params= 10
+        self.num_shape_params= 0
+        self.joint_dim = 9  # 3
+        self.parents_dict = self.immediate_parent_to_all_ancestors() # SMPL.parents.tolist()
+        self.fc_embed = nn.Linear(self.num_shape_params  + self.num_glob_params + self.num_cam_params,
+                                embed_dim)
+        self.activation = nn.ELU()
+        self.num_joints = 23
 
-            self.fc_pose = nn.ModuleList()
-            init_val = 1e-5
-            self.rodriguez = RodriguesModule()
-            for joint in range(self.num_joints):
-                num_parents = len(self.parents_dict[joint])
-                input_dim = embed_dim + num_parents * (9 + 3 + 9) 
-                fc = nn.Sequential(nn.Linear(input_dim, embed_dim // 2),
-                                                self.activation,
-                                                nn.Linear(embed_dim // 2, self.joint_dim))
-                                                #   nn.Linear(embed_dim // 2, 3))
-                                                #   nn.Linear(embed_dim // 2, 9)))
-                fc[-1].weight.data.uniform_(-init_val, init_val)
-                fc[-1].bias.data.zero_()
-                self.fc_pose.append(fc)
-                
-        def immediate_parent_to_all_ancestors(self,immediate_parents=[-1,0,0,0,1,2,3,4,5,6,7,8,9,9,9,12,13,14,16,17,18,19,20,21]):
-            """
-            :param immediate_parents: list with len = num joints, contains index of each joint's parent.
-                    - includes root joint, but its parent index is -1.
-            :return: ancestors_dict: dict of lists, dict[joint] is ordered list of parent joints.
-                    - DOES NOT INCLUDE ROOT JOINT! Joint 0 here is actually joint 1 in SMPL.
-            """
-            ancestors_dict = defaultdict(list)
-            for i in range(1, len(immediate_parents)):  # Excluding root joint
-                joint = i - 1
-                immediate_parent = immediate_parents[i] - 1
-                if immediate_parent >= 0:
-                    ancestors_dict[joint] += [immediate_parent] + ancestors_dict[immediate_parent]
-            return ancestors_dict
-
-        # def forward(self,shape_params, glob, cam):
-        def forward(self, glob):
-            # Pose
-            embed = self.activation(self.fc_embed(torch.cat([glob], dim=1)))  # (bsize, embed dim)
-            batch_size = embed.shape[0]
-            pose_F = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
-            pose_U = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
-            pose_S = torch.zeros(batch_size, self.num_joints, 3, device=self.device)  # (bsize, 23, 3)
-            pose_V = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
-            pose_U_proper = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
-            pose_S_proper = torch.zeros(batch_size, self.num_joints, 3, device=self.device)  # (bsize, 23, 3)
-            pose_rotmats_mode = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
-            for joint in range(self.num_joints):
-                parents = self.parents_dict[joint]
-                fc_joint = self.fc_pose[joint]
-                if len(parents) > 0:
-                    parents_U_proper = pose_U_proper[:, parents, :, :].view(batch_size, -1)  # (bsize, num parents * 3 * 3)
-                    parents_S_proper = pose_S_proper[:, parents, :].view(batch_size, -1)  # (bsize, num parents * 3)
-                    parents_mode = pose_rotmats_mode[:, parents, :, :].view(batch_size, -1)  # (bsize, num parents * 3 * 3)
-
-                    joint_F = fc_joint(torch.cat([embed, parents_U_proper, parents_S_proper, parents_mode], dim=1))
-                else:
-                    joint_F = fc_joint(embed)
-                # joint_F = self.rodriguez(joint_F)
-                joint_F = joint_F.view(-1,3,3)
-
-                joint_U, joint_S, joint_V = torch.svd(joint_F.view(-1,3,3).cpu())  # (bsize, 3, 3), (bsize, 3), (bsize, 3, 3)
-
-                with torch.no_grad():
-                    det_joint_U, det_joint_V = torch.det(joint_U).to(self.device), torch.det(joint_V).to(self.device)  # (bsize,), (bsize,)
-                joint_U, joint_S, joint_V = joint_U.to(self.device), joint_S.to(self.device), joint_V.to(self.device)
-
-                # "Proper" SVD
-                joint_U_proper = joint_U.clone()
-                joint_S_proper = joint_S.clone()
-                joint_V_proper = joint_V.clone()
-                # Ensure that U_proper and V_proper are rotation matrices (orthogonal with det = 1).
-                joint_U_proper[:, :, 2] *= det_joint_U.unsqueeze(-1)
-                joint_S_proper[:, 2] *= det_joint_U * det_joint_V
-                joint_V_proper[:, :, 2] *= det_joint_V.unsqueeze(-1)
-
-                joint_rotmat_mode = torch.matmul(joint_U_proper, joint_V_proper.transpose(dim0=-1, dim1=-2))
-
-                pose_F[:, joint, :, :] = joint_F
-                pose_U[:, joint, :, :] = joint_U
-                pose_S[:, joint, :] = joint_S
-                pose_V[:, joint, :, :] = joint_V
-                pose_U_proper[:, joint, :, :] = joint_U_proper
-                pose_S_proper[:, joint, :] = joint_S_proper
-                pose_rotmats_mode[:, joint, :, :] = joint_rotmat_mode
-
-            return {
-                "Rs": pose_F,
-                "pose_U":pose_U,
-                "pose_S":pose_S,
-                "pose_V":pose_V,
-            }
-else:
-    class Autoregression(nn.Module):
-        def __init__(self,device='cuda'):
-            super(Autoregression,self).__init__()
-            self.device = device
-
-            mlp_depth=2
-            self.num_joints = 23
-            embedding_size = 69
-            # mlp_width = 128+9 * self.num_joints
-            mlp_width = 128
-            block_mlps = [nn.Linear(embedding_size, mlp_width), nn.ReLU()]
+        self.fc_pose = nn.ModuleList()
+        init_val = 1e-5
+        self.rodriguez = RodriguesModule()
+        for joint in range(self.num_joints):
+            num_parents = len(self.parents_dict[joint])
+            input_dim = embed_dim + num_parents * (9 + 3 + 9) 
+            fc = nn.Sequential(nn.Linear(input_dim, embed_dim // 2),
+                                            self.activation,
+                                            nn.Linear(embed_dim // 2, self.joint_dim))
+                                            #   nn.Linear(embed_dim // 2, 3))
+                                            #   nn.Linear(embed_dim // 2, 9)))
+            fc[-1].weight.data.uniform_(-init_val, init_val)
+            fc[-1].bias.data.zero_()
+            self.fc_pose.append(fc)
             
-            # TODO: change heavy network  罗德里格斯公式
-            for _ in range(0, mlp_depth-1):
-                block_mlps += [nn.Linear(mlp_width, mlp_width), nn.ReLU()]
+    def immediate_parent_to_all_ancestors(self,immediate_parents=[-1,0,0,0,1,2,3,4,5,6,7,8,9,9,9,12,13,14,16,17,18,19,20,21]):
+        """
+        :param immediate_parents: list with len = num joints, contains index of each joint's parent.
+                - includes root joint, but its parent index is -1.
+        :return: ancestors_dict: dict of lists, dict[joint] is ordered list of parent joints.
+                - DOES NOT INCLUDE ROOT JOINT! Joint 0 here is actually joint 1 in SMPL.
+        """
+        ancestors_dict = defaultdict(list)
+        for i in range(1, len(immediate_parents)):  # Excluding root joint
+            joint = i - 1
+            immediate_parent = immediate_parents[i] - 1
+            if immediate_parent >= 0:
+                ancestors_dict[joint] += [immediate_parent] + ancestors_dict[immediate_parent]
+        return ancestors_dict
 
-            block_mlps += [nn.Linear(mlp_width, 3 * self.num_joints)] 
+    # def forward(self,shape_params, glob, cam):
+    def forward(self, glob):
+        # Pose
+        embed = self.activation(self.fc_embed(torch.cat([glob], dim=1)))  # (bsize, embed dim)
+        batch_size = embed.shape[0]
+        pose_F = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
+        pose_U = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
+        pose_S = torch.zeros(batch_size, self.num_joints, 3, device=self.device)  # (bsize, 23, 3)
+        pose_V = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
+        pose_U_proper = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
+        pose_S_proper = torch.zeros(batch_size, self.num_joints, 3, device=self.device)  # (bsize, 23, 3)
+        pose_rotmats_mode = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
+        for joint in range(self.num_joints):
+            parents = self.parents_dict[joint]
+            fc_joint = self.fc_pose[joint]
+            if len(parents) > 0:
+                parents_U_proper = pose_U_proper[:, parents, :, :].view(batch_size, -1)  # (bsize, num parents * 3 * 3)
+                parents_S_proper = pose_S_proper[:, parents, :].view(batch_size, -1)  # (bsize, num parents * 3)
+                parents_mode = pose_rotmats_mode[:, parents, :, :].view(batch_size, -1)  # (bsize, num parents * 3 * 3)
 
-            self.block_mlps = nn.Sequential(*block_mlps)
+                joint_F = fc_joint(torch.cat([embed, parents_U_proper, parents_S_proper, parents_mode], dim=1))
+            else:
+                joint_F = fc_joint(embed)
+            # joint_F = self.rodriguez(joint_F)
+            joint_F = joint_F.view(-1,3,3)
 
-            # init the weights of the last layer as very small value
-            # -- at the beginning, we hope the rotation matrix can be identity 
-            init_val = 1e-5
-            last_layer = self.block_mlps[-1]
-            last_layer.weight.data.uniform_(-init_val, init_val)
-            last_layer.bias.data.zero_()
-            self.rodriguez = RodriguesModule()
-            
-            
-        def forward(self,feature):
-            # joint_F = self.block_mlps(feature).view(-1, 3, 3)  # (bsize, 3, 3)
-            joint_F = self.block_mlps(feature[:, 3:]).view(-1, 3)  # (Joints, 3, 3)
-            
-            
-            joint_F = self.rodriguez(joint_F)
+            joint_U, joint_S, joint_V = torch.svd(joint_F.view(-1,3,3).cpu())  # (bsize, 3, 3), (bsize, 3), (bsize, 3, 3)
 
-            joint_U, joint_S, joint_V = torch.svd(joint_F)  # (Joints, 3, 3), (Joints, 3), (Joints, 3, 3)
+            with torch.no_grad():
+                det_joint_U, det_joint_V = torch.det(joint_U).to(self.device), torch.det(joint_V).to(self.device)  # (bsize,), (bsize,)
+            joint_U, joint_S, joint_V = joint_U.to(self.device), joint_S.to(self.device), joint_V.to(self.device)
 
-            return {
-                "Rs": joint_F,
-                "pose_U":joint_U,
-                "pose_S":joint_S,
-                "pose_V":joint_V,
-            }
+            # "Proper" SVD
+            joint_U_proper = joint_U.clone()
+            joint_S_proper = joint_S.clone()
+            joint_V_proper = joint_V.clone()
+            # Ensure that U_proper and V_proper are rotation matrices (orthogonal with det = 1).
+            joint_U_proper[:, :, 2] *= det_joint_U.unsqueeze(-1)
+            joint_S_proper[:, 2] *= det_joint_U * det_joint_V
+            joint_V_proper[:, :, 2] *= det_joint_V.unsqueeze(-1)
+
+            joint_rotmat_mode = torch.matmul(joint_U_proper, joint_V_proper.transpose(dim0=-1, dim1=-2))
+
+            pose_F[:, joint, :, :] = joint_F
+            pose_U[:, joint, :, :] = joint_U
+            pose_S[:, joint, :] = joint_S
+            pose_V[:, joint, :, :] = joint_V
+            pose_U_proper[:, joint, :, :] = joint_U_proper
+            pose_S_proper[:, joint, :] = joint_S_proper
+            pose_rotmats_mode[:, joint, :, :] = joint_rotmat_mode
+
+        return {
+            "Rs": pose_F,
+            "pose_U":pose_U,
+            "pose_S":pose_S,
+            "pose_V":pose_V,
+        }
+
 
 class RodriguesModule(nn.Module):
     def forward(self, rvec):
@@ -352,9 +281,6 @@ class GaussianModel:
             self.cross_attention_lbs = CrossAttention_lbs()
             self.cross_attention_lbs.to(self.device)
             
-            self.cross_attention_pos = CrossAttention_pos()
-            self.cross_attention_pos.to(self.device)
-
     def capture(self):
         return (
             self.active_sh_degree,
@@ -462,7 +388,7 @@ class GaussianModel:
                 {'params': [self._rotation], 'lr': training_args.rotation_lr, "name": "rotation"}
             ]
         else:
-            # Highlight
+            # Highlight_autoregression
             l = [
                 {'params': [self._xyz], 'lr': training_args.position_lr_init * self.spatial_lr_scale, "name": "xyz"},
                 {'params': [self._features_dc], 'lr': training_args.feature_lr, "name": "f_dc"},
@@ -476,7 +402,6 @@ class GaussianModel:
                 # {'params': self.auto_regression.parameters(),'lr':0.00001,"name":"auto_regression"},
                 {'params': self.weight_offset_decoder.parameters(), 'lr': training_args.lbs_offset_lr, "name": "weight_offset_decoder"},
                 {'params': self.cross_attention_lbs.parameters(), 'lr': 0.0001, "name": "cross_attention_lbs"},
-                {'params': self.cross_attention_pos.parameters(), 'lr': 0.001, "name": "cross_attention_pos"},
             ] 
 
         # self.optimizer = torch.optim.Adam(l, lr=0.0, eps=1e-15)
@@ -533,315 +458,11 @@ class GaussianModel:
                                 [ 0.      ,  0.      , -1.0002  , -0.020002],
                                 [ 0.      ,  0.      , -1.      ,  0.      ]])
         os.makedirs(self.outdir, exist_ok=True)
-        if mode == 'geo':
-            path = os.path.join(self.outdir, self.save_path + '_mesh.ply')
-            mesh = self.extract_mesh(path, self.density_thresh)
-            mesh.write_ply(path)
 
-        elif mode == 'geo+tex':
-            path = os.path.join(self.outdir, self.save_path + '_mesh.' + self.mesh_format)
-            mesh = self.extract_mesh(path, self.density_thresh)
-
-            # perform texture extraction
-            print(f"[INFO] unwrap uv...")
-            h = w = texture_size
-            mesh.auto_uv()
-            mesh.auto_normal()
-
-            albedo = torch.zeros((h, w, 3), device=self.device, dtype=torch.float32)
-            cnt = torch.zeros((h, w, 1), device=self.device, dtype=torch.float32)
-
-            # self.prepare_train() # tmp fix for not loading 0123
-            # vers = [0]
-            # hors = [0]
-            import nvdiffrast.torch as dr            
-            glctx = dr.RasterizeCudaContext()
-            
-            hors = [0, 45, -45, 90, -90, 135, -135, 180] * 3 + [0, 0]
-            vers = [0 for i in range(len(hors))]
-            render_resolution = 512
-            
-            temp_video =  copy.deepcopy(viewpoint_camera)
-            # viewpoint_camera = copy.deepcopy(temp_video)
-
-            for ver, hor in zip(vers, hors):
-                # render image
-                # world_view_transform = torch.tensor(getWorld2View2(viewpoint_camera.R, viewpoint_camera.T, viewpoint_camera.trans, self.scale)).transpose(0, 1).cuda()
-                # projection_matrix = getProjectionMatrix_refine(torch.Tensor(viewpoint_camera.K).cuda(), render_resolution, render_resolution, self.near, self.far).transpose(0, 1)
-                # full_proj_transform = (world_view_transform.unsqueeze(0).bmm(projection_matrix.unsqueeze(0))).squeeze(0)
-                # camera_center = world_view_transform.inverse()[3, :3]
-                pose = orbit_camera(ver, hor, self.radius,is_degree=True, target=None, opengl=True)
-                # # cur_cam = MiniCam(pose,render_resolution,render_resolution,\
-                # #     viewpoint_camera.FoVy,viewpoint_camera.FoVx,self.near,self.far)
-                
-                # viewpoint_camera.world_view_transform = world_view_transform
-                # viewpoint_camera.full_proj_transform = full_proj_transform
-                # viewpoint_camera.camera_center = camera_center
-                # cur_out = render(viewpoint_camera, self, pipe, background)
-                # rgbs = cur_out["render"].unsqueeze(0) # [1, 3, H, W] in [0, 1]
-                # print('over')
-                from math import cos,sin
-                
-                # Sita = 1
-                # Rz = np.array([[cos(Sita), -sin(Sita), 0],
-                #                [sin(Sita), cos(Sita), 0],
-                #                [0, 0, 1]])
-                # Rx = np.array([[cos(Sita), -sin(Sita), 0],
-                #                [sin(Sita), cos(Sita), 0],
-                #                [0, 0, 1]])
-
-                viewpoint_camera = copy.deepcopy(temp_video)
-                # Rx = np.array([[1, 0, 0],[0, 0, -1],[0, 1, 0]])
-                # Ry = np.array([[0, 0, 1],[0, 1, 0],[-1, 0, 0]])
-                # Rz = np.array([[0, -1, 0],[1, 0, 0],[0, 0, 1]])
-                pose = np.matmul(np.array([[1,0,0,0], [0,-1,0,0], [0,0,-1,0], [0,0,0,1]]), self.get_camera_extrinsics_zju_mocap_refine(viewpoint_camera.uid))
-                R = pose[:3,:3]
-                T = pose[:3, 3]
-                world_view_transform = torch.tensor(getWorld2View2(R, T, viewpoint_camera.trans, self.scale)).transpose(0, 1).cuda()
-                # world_view_transform = torch.tensor(getWorld2View2(viewpoint_camera.R@Rz, viewpoint_camera.T, viewpoint_camera.trans, self.scale)).transpose(0, 1).cuda()
-                projection_matrix = getProjectionMatrix_refine(torch.Tensor(viewpoint_camera.K).cuda(), render_resolution, render_resolution, self.near, self.far).transpose(0, 1)
-                full_proj_transform = (world_view_transform.unsqueeze(0).bmm(projection_matrix.unsqueeze(0))).squeeze(0)
-                camera_center = world_view_transform.inverse()[3, :3]
-                viewpoint_camera.world_view_transform = world_view_transform
-                viewpoint_camera.full_proj_transform = full_proj_transform
-                viewpoint_camera.camera_center = camera_center
-                cur_out = render(viewpoint_camera, self, pipe, background)
-                rgbs = cur_out["render"].unsqueeze(0) # [1, 3, H, W] in [0, 1]
-                print('over')
-
-                # enhance texture quality with zero123 [not working well]
-                # if self.guidance_model == 'zero123':
-                #     rgbs = self.guidance.refine(rgbs, [ver], [hor], [0])
-                    # import kiui
-                    # kiui.vis.plot_image(rgbs)
-                # get coordinate in texture image
-                pose = torch.from_numpy(pose.astype(np.float32)).to(self.device)
-
-                proj = torch.from_numpy(self.perspective.astype(np.float32)).to(self.device)
-
-                v_cam = torch.matmul(F.pad(mesh.v, pad=(0, 1), mode='constant', value=1.0), torch.inverse(pose).T).float().unsqueeze(0)
-                v_clip = v_cam @ proj.T
-                rast, rast_db = dr.rasterize(glctx, v_clip, mesh.f, (render_resolution, render_resolution))
-
-                depth, _ = dr.interpolate(-v_cam[..., [2]], rast, mesh.f) # [1, H, W, 1]
-                depth = depth.squeeze(0) # [H, W, 1]
-
-                alpha = (rast[0, ..., 3:] > 0).float()
-
-                uvs, _ = dr.interpolate(mesh.vt.unsqueeze(0), rast, mesh.ft)  # [1, 512, 512, 2] in [0, 1]
-
-                # use normal to produce a back-project mask
-                normal, _ = dr.interpolate(mesh.vn.unsqueeze(0).contiguous(), rast, mesh.fn)
-                normal = safe_normalize(normal[0])
-
-                # rotated normal (where [0, 0, 1] always faces camera)
-                rot_normal = normal @ pose[:3, :3]
-                viewcos = rot_normal[..., [2]]
-
-                mask = (alpha > 0) & (viewcos > 0.5)  # [H, W, 1]
-                mask = mask.view(-1)
-
-                uvs = uvs.view(-1, 2).clamp(0, 1)[mask]
-                rgbs = rgbs.view(3, -1).permute(1, 0)[mask].contiguous()
-                
-                # update texture image
-                cur_albedo, cur_cnt = mipmap_linear_grid_put_2d(
-                    h, w,
-                    uvs[..., [1, 0]] * 2 - 1,
-                    rgbs,
-                    min_resolution=256,
-                    return_count=True,
-                )
-                
-                # albedo += cur_albedo
-                # cnt += cur_cnt
-                mask = cnt.squeeze(-1) < 0.1
-                albedo[mask] += cur_albedo[mask]
-                cnt[mask] += cur_cnt[mask]
-
-            mask = cnt.squeeze(-1) > 0
-            albedo[mask] = albedo[mask] / cnt[mask].repeat(1, 3)
-
-            mask = mask.view(h, w)
-
-            albedo = albedo.detach().cpu().numpy()
-            mask = mask.detach().cpu().numpy()
-
-            # dilate texture
-            from sklearn.neighbors import NearestNeighbors
-            from scipy.ndimage import binary_dilation, binary_erosion
-
-            inpaint_region = binary_dilation(mask, iterations=32)
-            inpaint_region[mask] = 0
-
-            search_region = mask.copy()
-            not_search_region = binary_erosion(search_region, iterations=3)
-            search_region[not_search_region] = 0
-
-            search_coords = np.stack(np.nonzero(search_region), axis=-1)
-            inpaint_coords = np.stack(np.nonzero(inpaint_region), axis=-1)
-
-            knn = NearestNeighbors(n_neighbors=1, algorithm="kd_tree").fit(
-                search_coords
-            )
-            _, indices = knn.kneighbors(inpaint_coords)
-
-            albedo[tuple(inpaint_coords.T)] = albedo[tuple(search_coords[indices[:, 0]].T)]
-
-            mesh.albedo = torch.from_numpy(albedo).to(self.device)
-            mesh.write(path)
-
-        else:
-            path = os.path.join(self.outdir, self.save_path + '_model.ply')
-            self.save_ply(path)
+        path = os.path.join(self.outdir, self.save_path + '_model.ply')
+        self.save_ply(path)
 
         print(f"[INFO] save model to {path}.")
-
-    @torch.no_grad()
-    def extract_fields(self, resolution=512, num_blocks=16, relax_ratio=1.5):
-        # resolution: resolution of field
-        
-        block_size = 2 / num_blocks
-
-        assert resolution % block_size == 0
-        split_size = resolution // num_blocks
-
-        opacities = self.get_opacity
-
-        # pre-filter low opacity gaussians to save computation
-        mask = (opacities > 0.005).squeeze(1)
-
-        opacities = opacities[mask]
-        xyzs = self.get_xyz[mask]
-        stds = self.get_scaling[mask]
-        
-        # normalize to ~ [-1, 1]
-        mn, mx = xyzs.amin(0), xyzs.amax(0)
-        self.center = (mn + mx) / 2
-        self.scale = 1.8 / (mx - mn).amax().item()
-
-        xyzs = (xyzs - self.center) * self.scale
-        stds = stds * self.scale
-
-        covs = self.covariance_activation(stds, 1, self._rotation[mask])
-
-        # tile
-        device = opacities.device
-        occ = torch.zeros([resolution] * 3, dtype=torch.float32, device=device)
-
-        X = torch.linspace(-1, 1, resolution).split(split_size)
-        Y = torch.linspace(-1, 1, resolution).split(split_size)
-        Z = torch.linspace(-1, 1, resolution).split(split_size)
-
-
-        # loop blocks (assume max size of gaussian is small than relax_ratio * block_size !!!)
-        for xi, xs in enumerate(X):
-            for yi, ys in enumerate(Y):
-                for zi, zs in enumerate(Z):
-                    xx, yy, zz = torch.meshgrid(xs, ys, zs)
-                    # sample points [M, 3]
-                    pts = torch.cat([xx.reshape(-1, 1), yy.reshape(-1, 1), zz.reshape(-1, 1)], dim=-1).to(device)
-                    # in-tile gaussians mask
-                    vmin, vmax = pts.amin(0), pts.amax(0)
-                    vmin -= block_size * relax_ratio
-                    vmax += block_size * relax_ratio
-                    mask = (xyzs < vmax).all(-1) & (xyzs > vmin).all(-1)
-                    # if hit no gaussian, continue to next block
-                    if not mask.any():
-                        continue
-                    mask_xyzs = xyzs[mask] # [L, 3]
-                    mask_covs = covs[mask] # [L, 6]
-                    mask_opas = opacities[mask].view(1, -1) # [L, 1] --> [1, L]
-
-                    # query per point-gaussian pair.
-                    g_pts = pts.unsqueeze(1).repeat(1, mask_covs.shape[0], 1) - mask_xyzs.unsqueeze(0) # [M, L, 3]
-                    g_covs = mask_covs.unsqueeze(0).repeat(pts.shape[0], 1, 1) # [M, L, 6]
-
-                    # batch on gaussian to avoid OOM
-                    batch_g = 1024
-                    val = 0
-                    for start in range(0, g_covs.shape[1], batch_g):
-                        end = min(start + batch_g, g_covs.shape[1])
-                        w = gaussian_3d_coeff(g_pts[:, start:end].reshape(-1, 3), g_covs[:, start:end].reshape(-1, 6)).reshape(pts.shape[0], -1) # [M, l]
-                        val += (mask_opas[:, start:end] * w).sum(-1)
-                    
-                    # kiui.lo(val, mask_opas, w)
-                
-                    occ[xi * split_size: xi * split_size + len(xs), 
-                        yi * split_size: yi * split_size + len(ys), 
-                        zi * split_size: zi * split_size + len(zs)] = val.reshape(len(xs), len(ys), len(zs)) 
-        
-        # kiui.lo(occ, verbose=1)
-
-        return occ
-    
-    def extract_mesh(self, path, density_thresh=1, resolution=512, decimate_target=1e5):
-    # def extract_mesh(self, path, density_thresh=1, resolution=512, decimate_target=0):
-
-        #Local Density Query
-        density_thresh=1
-        resolution=512
-        decimate_target=1e5
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        #获取每个块内信息
-        occ = self.extract_fields(resolution,  num_blocks=16, relax_ratio=1.5).detach().cpu().numpy()
-        #使用Marching Cubes算法在每个块内查询8^3的密集网格，最终得到128^3的密集网格
-        import mcubes
-        vertices, triangles = mcubes.marching_cubes(occ, density_thresh)
-        #将3D空间划分为16^3个块，并归一化
-        vertices = vertices / (resolution - 1.0) * 2 - 1
-
-        # transform back to the original space
-        vertices = vertices / self.scale + self.center.detach().cpu().numpy()
-        #在网格中的每个查询位置x处，对每个保留的3D高斯的加权不透明度进行求和，然后通过清理和减少网格的步骤来处理和优化网格数据。
-        vertices, triangles = clean_mesh(vertices, triangles, remesh=True, remesh_size=0.015)
-        if decimate_target > 0 and triangles.shape[0] > decimate_target:
-            vertices, triangles = decimate_mesh(vertices, triangles, decimate_target)
-
-        v = torch.from_numpy(vertices.astype(np.float32)).contiguous().cuda()
-        f = torch.from_numpy(triangles.astype(np.int32)).contiguous().cuda()
-
-        mesh = Mesh(v=v, f=f, device='cuda')
-        mesh.write_ply(path)
-        print(
-            f"[INFO] marching cubes result: {v.shape} ({v.min().item()}-{v.max().item()}), {f.shape}"
-        )
-
-        print("========")
-
-        # density_thresh=1
-        # resolution=1024
-        # decimate_target=1e5
-        # os.makedirs(os.path.dirname(path), exist_ok=True)
-        # #获取每个块内信息
-        # occ = self.extract_fields(resolution,  num_blocks=16, relax_ratio=1.5).detach().cpu().numpy()
-        # #使用Marching Cubes算法在每个块内查询8^3的密集网格，最终得到128^3的密集网格
-        # import mcubes
-        # vertices, triangles = mcubes.marching_cubes(occ, density_thresh)
-        # #将3D空间划分为16^3个块，并归一化
-        # vertices = vertices / (resolution - 1.0) * 2 - 1
-
-        # # transform back to the original space
-        # vertices = vertices / self.scale + self.center.detach().cpu().numpy()
-        # #在网格中的每个查询位置x处，对每个保留的3D高斯的加权不透明度进行求和，然后通过清理和减少网格的步骤来处理和优化网格数据。
-        # vertices, triangles = clean_mesh(vertices, triangles, remesh=True, remesh_size=0.015)
-        # if decimate_target > 0 and triangles.shape[0] > decimate_target:
-        #     vertices, triangles = decimate_mesh(vertices, triangles, decimate_target)
-
-        # v = torch.from_numpy(vertices.astype(np.float32)).contiguous().cuda()
-        # f = torch.from_numpy(triangles.astype(np.int32)).contiguous().cuda()
-
-        # print(
-        #     f"[INFO] marching cubes result: {v.shape} ({v.min().item()}-{v.max().item()}), {f.shape}"
-        # )
-
-        # mesh = Mesh(v=v, f=f, device='cuda')
-        
-        # mesh.write_ply(path)
-
-
-
-        return mesh
 
     def update_learning_rate(self, iteration):
         ''' Learning rate scheduling per step '''
@@ -1097,7 +718,7 @@ class GaussianModel:
         # for each gaussian point, find its nearest 2 points and return the distance
         _, point_ids = self.knn_near_2(self._xyz[None].detach(), self._xyz[None].detach())     
         xyz = self._xyz[point_ids[0]].detach()
-        rotation_q = self._rotation[point_ids[0]].detach()
+        rotation_q = self._rotation[point_ids[0]].detach()   # torch.Size([6890, 4])
         scaling_diag = self.get_scaling[point_ids[0]].detach()
 
         xyz_0 = xyz[:, 0].reshape(-1, 3)
@@ -1118,7 +739,7 @@ class GaussianModel:
         stds = self.get_scaling[selected_pts_mask]
         means =torch.zeros((stds.size(0), 3),device="cuda")
         samples = torch.normal(mean=means, std=stds)
-        rots = build_rotation(self._rotation[selected_pts_mask])
+        rots = build_rotation(self._rotation[selected_pts_mask])  # (*,3,3)
         new_xyz = torch.bmm(rots, samples.unsqueeze(-1)).squeeze(-1) + self.get_xyz[selected_pts_mask]
         new_scaling = self.scaling_inverse_activation(self.get_scaling[selected_pts_mask])
         new_rotation = self._rotation[selected_pts_mask]
@@ -1323,8 +944,8 @@ class GaussianModel:
 
         self.mean_shape = True
         if self.mean_shape:
-            posedirs = self.SMPL_NEUTRAL['posedirs'].cuda().float() #torch.Size([6890, 3, 207])   23*9
-            pose_ = big_pose_params['poses']    # torch.Size([1, 72])
+            posedirs = self.SMPL_NEUTRAL['posedirs'].cuda().float() # torch.Size([6890, 3, 207])   23*9
+            pose_ = big_pose_params['poses']                        # torch.Size([1, 72])
             ident = torch.eye(3).cuda().float()
             batch_size = pose_.shape[0]
             rot_mats = batch_rodrigues(pose_.view(-1, 3)).view([batch_size, -1, 3, 3])  # 24,3,3

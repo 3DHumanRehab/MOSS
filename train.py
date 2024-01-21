@@ -10,33 +10,28 @@
 #
 
 import os
+import cv2
+import time
+import lpips
 import torch
+import pickle
+import numpy as np
+from tqdm import tqdm
 from random import randint
-from utils.loss_utils import l1_loss, l2_loss, ssim,matrix_fisher_nll
-from gaussian_renderer import render, network_gui #model
-import sys
+from utils.image_utils import psnr
 from scene import Scene, GaussianModel #Scene为scene自带;GaussianModel为自定义
 from utils.general_utils import safe_state
-import uuid
-import imageio
-import numpy as np
-import cv2
-import pickle
-from tqdm import tqdm
-from utils.image_utils import psnr
 from argparse import ArgumentParser, Namespace
+from gaussian_renderer import render, network_gui #model
 from arguments import ModelParams, PipelineParams, OptimizationParams
+from utils.loss_utils import l1_loss, l2_loss, ssim,matrix_fisher_nll,s3im_fun
 try:
     from torch.utils.tensorboard import SummaryWriter
     TENSORBOARD_FOUND = True
 except ImportError:
     TENSORBOARD_FOUND = False
 
-import lpips
 loss_fn_vgg = lpips.LPIPS(net='vgg').to(torch.device('cuda', torch.cuda.current_device()))
-
-import time
-import torch.nn.functional as F
 
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from):
     first_iter = 0
@@ -62,11 +57,13 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     ssim_loss_for_log = 0.0
     lpips_loss_for_log = 0.0
     nll_loss_for_log = 0.0
+    s3im_loss_for_log = 0.0
+
     progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
     first_iter += 1
 
-    # lpips_test_lst = []
     elapsed_time = 0
+
     render_pkg = None
     viewpoint_cam = None
     for iteration in range(first_iter, opt.iterations + 1):
@@ -120,16 +117,15 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         ssim_loss = ssim(img_pred, img_gt)
         # lipis loss
         lpips_loss = loss_fn_vgg(img_pred, img_gt).reshape(-1)
-
+        
+        s3im_loss = s3im_fun(img_pred, img_gt)
+        
         data = render_pkg['pose_out']
-        # pred_F,pred_U,pred_S,pred_V,target_R = data['Rs'],data['pose_U'],data['pose_S'],data['pose_V'],data['target_R'][1:]
         pred_F,pred_U,pred_S,pred_V,target_R = data['Rs'],data['pose_U'],data['pose_S'],data['pose_V'],data['target_R']
         nll_loss = matrix_fisher_nll(pred_F,pred_U,pred_S,pred_V,target_R)
-        # nll_loss = nll_loss.mean()   # tensor(4.1514e-07)
         nll_loss = nll_loss.mean()   # tensor(4.1514e-07)
 
-        # loss = Ll1 + 0.1 * mask_loss + 0.01 * (1.0 - ssim_loss) + 0.01 * lpips_loss
-        loss = Ll1 + 0.5 * mask_loss + 0.01 * (1.0 - ssim_loss) + 0.01 * lpips_loss + 0.01 * nll_loss
+        loss = Ll1 + 0.5 * mask_loss + 0.01 * (1.0 - ssim_loss) + 0.01 * lpips_loss + 0.01 * nll_loss +0.01 * s3im_loss
         loss.backward()
 
         # end time
@@ -150,9 +146,10 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             ssim_loss_for_log = 0.4 * ssim_loss.item() + 0.6 * ssim_loss_for_log
             lpips_loss_for_log = 0.4 * lpips_loss.item() + 0.6 * lpips_loss_for_log
             nll_loss_for_log = 0.4 * nll_loss.item() + 0.6 * nll_loss_for_log
+            s3im_loss_for_log = 0.4 * s3im_loss.item() + 0.6 * s3im_loss_for_log
             if iteration % 10 == 0:
                 progress_bar.set_postfix({"#pts": gaussians._xyz.shape[0],"nll Loss":f"{nll_loss_for_log:.{3}f}", "Ll1 Loss": f"{Ll1_loss_for_log:.{3}f}", "mask Loss": f"{mask_loss_for_log:.{2}f}",
-                                          "ssim": f"{ssim_loss_for_log:.{2}f}", "lpips": f"{lpips_loss_for_log:.{2}f}"})
+                                          "ssim": f"{ssim_loss_for_log:.{2}f}","s3im": f"{s3im_loss_for_log:.{2}f}",  "lpips": f"{lpips_loss_for_log:.{2}f}"})
                 progress_bar.update(10)
             if iteration == opt.iterations:
                 progress_bar.close()
@@ -196,11 +193,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     
 def prepare_output_and_logger(args):
     if not args.model_path:
-        # if os.getenv('OAR_JOB_ID'):
-        #     unique_str=os.getenv('OAR_JOB_ID')
-        # else:
-        #     unique_str = str(uuid.uuid4())
-        # args.model_path = os.path.join("./output/", unique_str[0:10])
         args.model_path = os.path.join("./output/", args.exp_name)
 
         
@@ -264,7 +256,7 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
                 psnr_test /= len(config['cameras'])   
                 ssim_test /= len(config['cameras'])
                 lpips_test /= len(config['cameras'])      
-                print("\n[ITER {}] Evaluating {} #{}: L1 {} PSNR {} SSIM {} LPIPS {}".format(iteration, config['name'], len(config['cameras']), l1_test, psnr_test, ssim_test, lpips_test))
+                print("\n[ITER {}] Evaluating {} #{}: L1 {} PSNR {} SSIM {} LPIPS {}".format(iteration, config['name'], len(config['cameras']), l1_test, psnr_test, ssim_test*100, lpips_test*1000))
                 if tb_writer:
                     tb_writer.add_scalar(config['name'] + '/loss_viewpoint - l1_loss', l1_test, iteration)
                     tb_writer.add_scalar(config['name'] + '/loss_viewpoint - psnr', psnr_test, iteration)
@@ -292,13 +284,13 @@ if __name__ == "__main__":
     parser.add_argument('--port', type=int, default=6009)
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
-    parser.add_argument("--test_iterations", nargs="+", type=int, default=[1_200, 2_000, 3_000, 4_000, 30_000])
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[1_200, 2_000, 3_000, 4_000, 30_000])
+    parser.add_argument("--test_iterations", nargs="+", type=int, default=[1_200, 2_000, 3_000, 4_000])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[1_200, 2_000, 3_000, 4_000])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
-    # sys_list = ['-s', '/root/workspace/Caixiang/GauHuman-main/my_392', '--eval', '--exp_name', 'zju_mocap_refine/my_392_100_pose_correction_lbs_offset_split_clone_merge_prune', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '2000']
-    name_list = ['387','392','393','394']
+    name_list = ['392']
+    # name_list = ['387','392','393','394']
     for name in name_list:
         print("Train on",name)
         sys_list = ['-s', f'/HOME/HOME/data/ZJU-MoCap/my_{name}', '--eval', '--exp_name', f'zju_mocap_refine/my_{name}_Fisher_CA', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '4000']
@@ -306,8 +298,7 @@ if __name__ == "__main__":
         # print("====="*88)
         # print('sys.argv[1:]',sys.argv[1:])
         # print("====="*88)
-        # import pdb
-        # pdb.set_trace()
+
         args.save_iterations.append(args.iterations)
         
         print("Optimizing " + args.model_path)
@@ -323,4 +314,3 @@ if __name__ == "__main__":
         print("\nTraining complete.")
   
 
- 

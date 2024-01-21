@@ -99,7 +99,6 @@ class Scene:
                 ckpt = torch.load(model_path, map_location='cuda:0')
                 self.gaussians.auto_regression.load_state_dict(ckpt['Autoregression'])
                 self.gaussians.cross_attention_lbs.load_state_dict(ckpt['CrossAttention_lbs'])
-                self.gaussians.cross_attention_pos.load_state_dict(ckpt['CrossAttention_pos'])
                 self.gaussians.pose_decoder.load_state_dict(ckpt['pose_decoder'])
                 self.gaussians.weight_offset_decoder.load_state_dict(ckpt['weight_offset_decoder'])
 
@@ -117,7 +116,6 @@ class Scene:
                 'iter': iteration,
                 'Autoregression':self.gaussians.auto_regression.state_dict(),
                 'CrossAttention_lbs':self.gaussians.cross_attention_lbs.state_dict(),
-                'CrossAttention_pos':self.gaussians.cross_attention_pos.state_dict(),
                 'pose_decoder': self.gaussians.pose_decoder.state_dict(),
                 'weight_offset_decoder': self.gaussians.weight_offset_decoder.state_dict(),
             }, model_path)
@@ -127,3 +125,4 @@ class Scene:
 
     def getTestCameras(self, scale=1.0):
         return self.test_cameras[scale]
+    

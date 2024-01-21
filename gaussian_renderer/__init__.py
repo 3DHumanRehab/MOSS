@@ -51,6 +51,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         prefiltered=False,
         debug=pipe.debug
     )
+
     rasterizer = GaussianRasterizer(raster_settings=raster_settings)
     means3D = pc.get_xyz
     pose_out = None
@@ -62,45 +63,18 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         
     else:
         if transforms is None:
-            # pose offset
-            # highlight
+            # highlight_train
             if True:
-                if False:
-                    pose_out = pc.auto_regression(glob = viewpoint_camera.smpl_param['poses'],)        # torch.Size([1, 72])
+                pose_out = pc.auto_regression(viewpoint_camera.smpl_param['poses'],)       # torch.Size([1, 72])
+                pose_out['target_R'] = viewpoint_camera.smpl_param['pose_rotmats']
+                correct_Rs =pose_out['Rs'].reshape(1,23,3,3)
 
-                    correct_Rs =pose_out['Rs'].reshape(1,23,3,3)
-                    # torch.Size([1, 69])
-                    # pose_out = pc.pose_decoder(dst_posevec)
-                    pose_out = pc.pose_decoder(viewpoint_camera.smpl_param['poses'][:, 3:])
-                    correct_Rs += pose_out['Rs']
-                elif True:
-                    
-                    pose_out = pc.auto_regression(viewpoint_camera.smpl_param['poses'],)       # torch.Size([1, 72])
-                    correct_Rs =pose_out['Rs'].reshape(1,23,3,3)
-                    pose_out['target_R'] = viewpoint_camera.smpl_param['pose_rotmats']
-                    
-                elif False:
-                    # pose_out = pc.auto_regression(glob = viewpoint_camera.smpl_param['poses'],        # torch.Size([1, 72])
-                                                # ) # torch.Size([1, 10])
-                    pose_out = pc.pose_decoder(viewpoint_camera.smpl_param['poses'][:, 3:])
-                    correct_Rs = pose_out['Rs']
-                elif False:
-                    correct_Rs = pc.cross_attention_pos(viewpoint_camera.smpl_param['poses'][:, 3:].reshape(1,23,3),means3D[None].detach())
-                    # pose_out = pc.pose_decoder(viewpoint_camera.smpl_param['poses'][:, 3:],correct_Rs)
-                    # correct_Rs = pose_out['Rs']
-                else :
-                    dst_posevec = viewpoint_camera.smpl_param['poses'][:, 3:]
-                    # torch.Size([1, 69])
-                    pose_out = pc.pose_decoder(dst_posevec)
-                    
-                    correct_Rs = pose_out['Rs'] # torch.Size([1, 23, 3, 3])
-
-                lbs_weights = pc.cross_attention_lbs(means3D[None],viewpoint_camera.smpl_param['poses'].reshape(1,24,3))
-            else:
+                lbs_weights = pc.cross_attention_lbs(means3D[None],correct_Rs)
+            else: 
                 pose_out = pc.pose_decoder(viewpoint_camera.smpl_param['poses'][:, 3:])
                 correct_Rs = pose_out['Rs']
-                lbs_weights = pc.weight_offset_decoder(means3D[None].detach()) #torch.Size([1, 6890, 3])
-                lbs_weights = lbs_weights.permute(0,2,1) #torch.Size([1, 6890, 24])
+                lbs_weights = pc.weight_offset_decoder(means3D[None].detach()) # torch.Size([1, 6890, 3])
+                lbs_weights = lbs_weights.permute(0,2,1)                       # torch.Size([1, 6890, 24])
 
             # transform points
             # torch.Size([1, 6890, 3])
@@ -127,7 +101,6 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
 
     # If precomputed colors are provided, use them. Otherwise, if it is desired to precompute colors
     # from SHs in Python, do it. If not, then SH -> RGB conversion will be done by rasterizer.
-    
     shs = None
     colors_precomp = None
     if override_color is None:
@@ -144,25 +117,26 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
 
     # Rasterize visible Gaussians to image, obtain their radii (on screen). 
     rendered_image, radii, depth, alpha = rasterizer(
-        means3D = means3D,
-        means2D = means2D,
-        shs = shs,
-        colors_precomp = colors_precomp,
-        opacities = opacity,
-        scales = scales,
-        rotations = rotations,
-        cov3D_precomp = cov3D_precomp)
+        means3D = means3D,                        # torch.Size([6890, 3])
+        means2D = means2D,                        # torch.Size([6890, 3])  3D空间中高斯模型的中心点经过投影变换后的2D坐标。
+        shs = shs,                                # torch.Size([6890, 16, 3])
+        colors_precomp = colors_precomp,          # None
+        opacities = opacity,                      # torch.Size([6890, 1])
+        scales = scales,                          # None
+        rotations = rotations,                    # None
+        cov3D_precomp = cov3D_precomp)            #torch.Size([6890, 6])
 
     # Those Gaussians that were frustum culled or had a radius of 0 were not visible.
     # They will be excluded from value updates used in the splitting criteria.
     return {"render": rendered_image,
             "render_depth": depth,
             "render_alpha": alpha,
-            "viewspace_points": screenspace_points,
-            "visibility_filter" : radii > 0,
-            "radii": radii,
+            "viewspace_points": screenspace_points, # means2D 3D空间中高斯模型的中心点经过投影变换后的2D坐标。
+            "visibility_filter" : radii > 0,  
+            "radii": radii,           # 屏幕空间中高斯模型的“半径”。在3D渲染中，当3D对象被投影到2D屏幕上时，它们的尺寸（如半径）可能会根据视角和深度而变化。radii 反映的是这些投影后的尺寸，它可以用于确定每个高斯模型在屏幕上占据的空间大小
             "transforms": transforms,
             "translation": translation,
             "correct_Rs": correct_Rs,
             "pose_out":pose_out,
             "means3D":means3D}
+

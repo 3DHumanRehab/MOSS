@@ -14,6 +14,31 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from math import exp
 
+
+def s3im_fun(src_vec, tar_vec,repeat_time=10):
+    #     r"""Implements Stochastic Structural SIMilarity(S3IM) algorithm.
+    #     It is proposed in the ICCV2023 paper  
+    #     `S3IM: Stochastic Structural SIMilarity and Its Unreasonable Effectiveness for Neural Fields`.
+    index_list = []
+    b,channel,patch_height,patch_width = src_vec.shape
+    src_vec = src_vec.reshape(b,-1)
+    tar_vec= tar_vec.reshape(b,-1)
+    for i in range(repeat_time):
+        if i == 0:
+            tmp_index = torch.arange(len(tar_vec))
+            index_list.append(tmp_index)
+        else:
+            ran_idx = torch.randperm(len(tar_vec))
+            index_list.append(ran_idx)
+    res_index = torch.cat(index_list)
+    tar_all = tar_vec[res_index]
+    src_all = src_vec[res_index]
+    tar_patch = tar_all.permute(1, 0).reshape(1, channel, patch_height, patch_width * repeat_time)
+    src_patch = src_all.permute(1, 0).reshape(1, channel, patch_height, patch_width * repeat_time)
+    loss = (1 - ssim(src_patch, tar_patch))
+    return loss
+
+
 def l1_loss(network_output, gt):
     return torch.abs((network_output - gt)).mean()
 
@@ -365,3 +390,8 @@ class PoseMFShapeGaussianLoss(nn.Module):
 
         return total_loss
 
+
+
+
+
+ 
