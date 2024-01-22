@@ -103,6 +103,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     lpipss /= len(views)
 
     # evalution metrics
+    print("==========="*8)
     print("\n[ITER {}] Evaluating {} #{}: PSNR  SSIM   LPIPS  ".format(iteration, name, len(views)))
     print(f"{psnrs.item(), ssims.item(), lpipss.item()*1000}")
 

@@ -70,11 +70,11 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             correct_Rs =pose_out['Rs'].reshape(1,23,3,3)
 
             lbs_weights = pc.cross_attention_lbs(means3D[None],correct_Rs)
-                
+
             # Baseline
             # pose_out = pc.pose_decoder(viewpoint_camera.smpl_param['poses'][:, 3:])
             # correct_Rs = pose_out['Rs']
-            
+
             # lbs_weights = pc.weight_offset_decoder(means3D[None].detach()) # torch.Size([1, 6890, 3])
             # lbs_weights = lbs_weights.permute(0,2,1)                       # torch.Size([1, 6890, 24])
 
@@ -140,5 +140,6 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             "translation": translation,
             "correct_Rs": correct_Rs,
             "pose_out":pose_out,
+            "lbs_weights":lbs_weights,
             "means3D":means3D}
 

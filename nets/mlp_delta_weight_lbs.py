@@ -85,7 +85,6 @@ class LBSOffsetDecoder(nn.Module):
         super(LBSOffsetDecoder, self).__init__()
 
         self.total_bones = total_bones
-
         self.actvn = nn.ReLU()
 
         input_ch = 63
@@ -106,8 +105,8 @@ class LBSOffsetDecoder(nn.Module):
             net = self.actvn(self.bw_linears[i](net))
             if i in self.skips:
                 net = torch.cat((features, net), dim=1)
-        bw = self.bw_fc(net)   
-        return bw 
+        bw = self.bw_fc(net)
+        return bw
 
 class Embedder:
     def __init__(self, **kwargs):

@@ -532,7 +532,7 @@ class GaussianModel:
 
         self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacities, new_scaling, new_rotation)
 
-    def kl_densify_and_clone(self, grads, grad_threshold, scene_extent, kl_threshold=0.4):
+    def kl_densify_and_clone(self, grads,rot_joint, grad_threshold, scene_extent, kl_threshold=0.4):
         # Extract points that satisfy the gradient condition
         selected_pts_mask = torch.where(torch.norm(grads, dim=-1) >= grad_threshold, True, False)
         selected_pts_mask = torch.logical_and(selected_pts_mask,
@@ -563,6 +563,8 @@ class GaussianModel:
         means =torch.zeros((stds.size(0), 3),device="cuda")
         samples = torch.normal(mean=means, std=stds)
         rots = build_rotation(self._rotation[selected_pts_mask])  # (*,3,3)
+
+        rots = rots @ rot_joint[selected_pts_mask].reshape(-1,3,3)
         new_xyz = torch.bmm(rots, samples.unsqueeze(-1)).squeeze(-1) + self.get_xyz[selected_pts_mask]
         new_scaling = self.scaling_inverse_activation(self.get_scaling[selected_pts_mask])
         new_rotation = self._rotation[selected_pts_mask]
@@ -572,7 +574,7 @@ class GaussianModel:
 
         self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacity, new_scaling, new_rotation)
 
-    def kl_densify_and_split(self, grads, grad_threshold, scene_extent, kl_threshold=0.4, N=2):
+    def kl_densify_and_split(self, grads,rot_joint, grad_threshold, scene_extent, kl_threshold=0.4, N=2):
         n_init_points = self.get_xyz.shape[0]
         # Extract points that satisfy the gradient condition
         padded_grad = torch.zeros((n_init_points), device="cuda")
@@ -606,6 +608,7 @@ class GaussianModel:
         means =torch.zeros((stds.size(0), 3),device="cuda")
         samples = torch.normal(mean=means, std=stds)
         rots = build_rotation(self._rotation[selected_pts_mask]).repeat(N,1,1)
+        # rots = rots @ rot_joint[selected_pts_mask].reshape(-1,3,3)            # [*,3,3]
         new_xyz = torch.bmm(rots, samples.unsqueeze(-1)).squeeze(-1) + self.get_xyz[selected_pts_mask].repeat(N, 1)
         new_scaling = self.scaling_inverse_activation(self.get_scaling[selected_pts_mask].repeat(N,1) / (0.8*N))
         new_rotation = self._rotation[selected_pts_mask].repeat(N,1)
@@ -618,7 +621,7 @@ class GaussianModel:
         prune_filter = torch.cat((selected_pts_mask, torch.zeros(N * selected_pts_mask.sum(), device="cuda", dtype=bool)))
         self.prune_points(prune_filter)
 
-    def kl_merge(self, grads, grad_threshold, scene_extent, kl_threshold=0.1):
+    def kl_merge(self, grads,grad_threshold, scene_extent, kl_threshold=0.1):
         n_init_points = self.get_xyz.shape[0]
         # Extract points that satisfy the gradient condition
         padded_grad = torch.zeros((n_init_points), device="cuda")
@@ -665,14 +668,30 @@ class GaussianModel:
             prune_filter = torch.cat((selected_pts_mask, torch.zeros(new_xyz.shape[0], device="cuda", dtype=bool)))
             self.prune_points(prune_filter)
 
-    def densify_and_prune(self, max_grad, min_opacity, extent, max_screen_size, kl_threshold=0.4, t_vertices=None, iter=None):
+    def densify_and_prune(self, max_grad,joint_F,lbs_weights, min_opacity, extent, max_screen_size, kl_threshold=0.4, t_vertices=None, iter=None):
         grads = self.xyz_gradient_accum / self.denom
+        
+        joint_F =  joint_F / self.denom[0]
+        lbs_weights = lbs_weights / self.denom[0]
+        
+        with torch.no_grad():
+            joint_U, joint_S, joint_V = torch.svd(joint_F)
+            det_joint_U, det_joint_V = torch.det(joint_U).to('cuda'), torch.det(joint_V).to('cuda')  # (bsize,), (bsize,)
+
+            # Ensure that U_proper and V_proper are rotation matrices (orthogonal with det = 1).
+            joint_U[:, :, 2] *= det_joint_U.unsqueeze(-1)
+            joint_V[:, :, 2] *= det_joint_V.unsqueeze(-1)
+        
+        rot_joint = torch.matmul(joint_U, joint_V.transpose(dim0=-1, dim1=-2))
+        rot_joint = torch.cat([torch.zeros(1,3,3).cuda(),rot_joint],dim=0).reshape(24,9)   # TODO:使用target rot  debug 查看根节点的旋转矩阵
+        rot_joint = (lbs_weights[0]@rot_joint).reshape(-1,3,3)
+
         grads[grads.isnan()] = 0.0
 
         # self.densify_and_clone(grads, max_grad, extent)
         # self.densify_and_split(grads, max_grad, extent)
-        self.kl_densify_and_clone(grads, max_grad, extent, kl_threshold)
-        self.kl_densify_and_split(grads, max_grad, extent, kl_threshold)
+        self.kl_densify_and_clone(grads,rot_joint, max_grad, extent, kl_threshold)
+        self.kl_densify_and_split(grads,rot_joint, max_grad, extent, kl_threshold)
         self.kl_merge(grads, max_grad, extent, 0.1)
 
         prune_mask = (self.get_opacity < min_opacity).squeeze()

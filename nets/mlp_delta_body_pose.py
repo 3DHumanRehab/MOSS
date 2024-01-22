@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import math
-
+from collections import defaultdict 
 
 # Highlight_autoregression
 
@@ -32,48 +32,46 @@ class Autoregression(nn.Module):
         self.rodriguez = RodriguesModule()
         
         
-    # def forward(self,feature):
-    #     joint_F = self.block_mlps(feature[:, 3:]).view(-1, 3)  # (Joints, 3, 3)
-    #     joint_F = self.rodriguez(joint_F)
-
-    #     joint_U, joint_S, joint_V = torch.svd(joint_F)  # (Joints, 3, 3), (Joints, 3), (Joints, 3, 3)
-
-    #     return {
-    #         "Rs": joint_F,
-    #         "pose_U":joint_U,
-    #         "pose_S":joint_S,
-    #         "pose_V":joint_V,
-        # }
-
-
     def forward(self,feature):
-        joint_F = self.block_mlps(feature[:, 3:]).view(-1, 3)  # (Joints, 3)
-        joint_F = self.rodriguez(joint_F)                      # (Joints, 3, 3)
+        joint_F = self.block_mlps(feature[:, 3:]).view(-1, 3)  # (Joints, 3, 3)
+        joint_F = self.rodriguez(joint_F)
 
         joint_U, joint_S, joint_V = torch.svd(joint_F)  # (Joints, 3, 3), (Joints, 3), (Joints, 3, 3)
 
-        with torch.no_grad():
-            det_joint_U, det_joint_V = torch.det(joint_U).to(self.device), torch.det(joint_V).to(self.device)  # (bsize,), (bsize,)
-        joint_U, joint_S, joint_V = joint_U.to(self.device), joint_S.to(self.device), joint_V.to(self.device)
-
-        # "Proper" SVD
-        joint_U_proper = joint_U.clone()
-        joint_S_proper = joint_S.clone()
-        joint_V_proper = joint_V.clone()
-        # Ensure that U_proper and V_proper are rotation matrices (orthogonal with det = 1).
-        joint_U_proper[:, :, 2] *= det_joint_U.unsqueeze(-1)
-        joint_S_proper[:, 2] *= det_joint_U * det_joint_V
-        joint_V_proper[:, :, 2] *= det_joint_V.unsqueeze(-1)
-
-        joint_rotmat_mode = torch.matmul(joint_U_proper, joint_V_proper.transpose(dim0=-1, dim1=-2))
         return {
             "Rs": joint_F,
-            "pose_F": joint_F,
             "pose_U":joint_U,
             "pose_S":joint_S,
             "pose_V":joint_V,
-            "joint_rotmat_mode":joint_rotmat_mode,
         }
+
+    # def forward(self,feature):
+    #     joint_F = self.block_mlps(feature[:, 3:]).view(-1, 3)  # (Joints, 3)
+    #     joint_F = self.rodriguez(joint_F)                      # (Joints, 3, 3)
+
+    #     joint_U, joint_S, joint_V = torch.svd(joint_F)  # (Joints, 3, 3), (Joints, 3), (Joints, 3, 3)
+
+    #     with torch.no_grad():
+    #         det_joint_U, det_joint_V = torch.det(joint_U).to(self.device), torch.det(joint_V).to(self.device)  # (bsize,), (bsize,)
+    #     joint_U, joint_S, joint_V = joint_U.to(self.device), joint_S.to(self.device), joint_V.to(self.device)
+
+    #     # "Proper" SVD
+    #     joint_U_proper = joint_U.clone()
+    #     joint_S_proper = joint_S.clone()
+    #     joint_V_proper = joint_V.clone()
+    #     # Ensure that U_proper and V_proper are rotation matrices (orthogonal with det = 1).
+    #     joint_U_proper[:, :, 2] *= det_joint_U.unsqueeze(-1)
+    #     joint_S_proper[:, 2] *= det_joint_U * det_joint_V
+    #     joint_V_proper[:, :, 2] *= det_joint_V.unsqueeze(-1)
+    #     joint_rotmat_mode = torch.matmul(joint_U_proper, joint_V_proper.transpose(dim0=-1, dim1=-2))
+    #     return {
+    #         "Rs": joint_F,
+    #         "pose_F": joint_F,
+    #         "pose_U":joint_U,
+    #         "pose_S":joint_S,
+    #         "pose_V":joint_V,
+    #         "joint_rotmat_mode":joint_rotmat_mode,
+    #     }
 
 
 

@@ -66,6 +66,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
     render_pkg = None
     viewpoint_cam = None
+    joint_F = torch.zeros(23,3,3).to('cuda')
+    lbs_weights = None
     for iteration in range(first_iter, opt.iterations + 1):
         if network_gui.conn == None:
             network_gui.try_connect()
@@ -101,7 +103,10 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             pipe.debug = True
         render_pkg = render(viewpoint_cam, gaussians, pipe, background)
         image, alpha, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["render_alpha"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
-
+        if lbs_weights==None:
+            lbs_weights = render_pkg['lbs_weights']
+        else:
+            lbs_weights += render_pkg['lbs_weights']
         # Loss
         gt_image = viewpoint_cam.original_image.cuda()
         bkgd_mask = viewpoint_cam.bkgd_mask.cuda()
@@ -122,6 +127,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         
         data = render_pkg['pose_out']
         pred_F,pred_U,pred_S,pred_V,target_R = data['Rs'],data['pose_U'],data['pose_S'],data['pose_V'],data['target_R']
+        joint_F += pred_F
         nll_loss = matrix_fisher_nll(pred_F,pred_U,pred_S,pred_V,target_R)
         nll_loss = nll_loss.mean()   # tensor(4.1514e-07)
 
@@ -169,9 +175,14 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 gaussians.add_densification_stats(viewspace_point_tensor, visibility_filter)
 
                 if iteration > opt.densify_from_iter and iteration % opt.densification_interval == 0:
+                # if iteration > 1 :
                     size_threshold = 20 if iteration > opt.opacity_reset_interval else None
-                    gaussians.densify_and_prune(opt.densify_grad_threshold, 0.005, scene.cameras_extent, size_threshold, kl_threshold=0.4, t_vertices=viewpoint_cam.big_pose_world_vertex, iter=iteration)
+                    # gaussians.densify_and_prune(opt.densify_grad_threshold, 0.005, scene.cameras_extent, size_threshold, kl_threshold=0.4, t_vertices=viewpoint_cam.big_pose_world_vertex, iter=iteration)
+                    gaussians.densify_and_prune(opt.densify_grad_threshold,joint_F,lbs_weights,0.005, scene.cameras_extent, size_threshold, kl_threshold=0.4, t_vertices=viewpoint_cam.big_pose_world_vertex, iter=iteration)
                     # gaussians.densify_and_prune(opt.densify_grad_threshold, 0.01, scene.cameras_extent, 1)
+                    # init data
+                    lbs_weights = None
+                    joint_F = torch.zeros(23,3,3).to('cuda')
                 if iteration % opt.opacity_reset_interval == 0 or (dataset.white_background and iteration == opt.densify_from_iter):
                     gaussians.reset_opacity()  # TODO:
 
@@ -256,6 +267,7 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
                 psnr_test /= len(config['cameras'])
                 ssim_test /= len(config['cameras'])
                 lpips_test /= len(config['cameras'])
+                print("==========="*8)
                 print("\n[ITER {}] Evaluating {} #{}: L1 {} PSNR  SSIM  LPIPS ".format(iteration, config['name'], len(config['cameras']), l1_test))
                 print(psnr_test.item(), ssim_test.item(), lpips_test.item()*1000)
                 if tb_writer:
