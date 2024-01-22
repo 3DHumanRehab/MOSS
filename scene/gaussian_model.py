@@ -27,188 +27,11 @@ from knn_cuda import KNN
 import pickle
 import torch.nn.functional as F
 # from gaussian_renderer import render
-from nets.mlp_delta_body_pose import BodyPoseRefiner
+from nets.mlp_delta_body_pose import BodyPoseRefiner,Autoregression
 from nets.mlp_delta_weight_lbs import LBSOffsetDecoder,CrossAttention_lbs
 from grid_put import mipmap_linear_grid_put_2d
 
-
-# Highlight_autoregression
-
-class Autoregression(nn.Module):
-    def __init__(self,device='cuda'):
-        super(Autoregression,self).__init__()
-        self.device = device
-        mlp_depth=2
-        self.num_joints = 23
-        embedding_size = 69
-        # mlp_width = 128+9 * self.num_joints
-        mlp_width = 128
-        block_mlps = [nn.Linear(embedding_size, mlp_width), nn.ReLU()]
-        
-        for _ in range(0, mlp_depth-1):
-            block_mlps += [nn.Linear(mlp_width, mlp_width), nn.ReLU()]
-
-        block_mlps += [nn.Linear(mlp_width, 3 * self.num_joints)] 
-
-        self.block_mlps = nn.Sequential(*block_mlps)
-
-        # init the weights of the last layer as very small value
-        # -- at the beginning, we hope the rotation matrix can be identity 
-        init_val = 1e-5
-        last_layer = self.block_mlps[-1]
-        last_layer.weight.data.uniform_(-init_val, init_val)
-        last_layer.bias.data.zero_()
-        self.rodriguez = RodriguesModule()
-        
-        
-    def forward(self,feature):
-        joint_F = self.block_mlps(feature[:, 3:]).view(-1, 3)  # (Joints, 3, 3)
-        joint_F = self.rodriguez(joint_F)
-
-        joint_U, joint_S, joint_V = torch.svd(joint_F)  # (Joints, 3, 3), (Joints, 3), (Joints, 3, 3)
-
-        return {
-            "Rs": joint_F,
-            "pose_U":joint_U,
-            "pose_S":joint_S,
-            "pose_V":joint_V,
-        }
-
-
-
-class Autoregression_autoregression(nn.Module):
-    def __init__(self,device='cuda'):
-        super(Autoregression_autoregression,self).__init__()
-        self.device = device
-        embed_dim = 64
-        self.num_glob_params = 24*3
-        self.num_cam_params = 0
-        # self.num_cam_params = 3
-        # self.num_shape_params= 10
-        self.num_shape_params= 0
-        self.joint_dim = 9  # 3
-        self.parents_dict = self.immediate_parent_to_all_ancestors() # SMPL.parents.tolist()
-        self.fc_embed = nn.Linear(self.num_shape_params  + self.num_glob_params + self.num_cam_params,
-                                embed_dim)
-        self.activation = nn.ELU()
-        self.num_joints = 23
-
-        self.fc_pose = nn.ModuleList()
-        init_val = 1e-5
-        self.rodriguez = RodriguesModule()
-        for joint in range(self.num_joints):
-            num_parents = len(self.parents_dict[joint])
-            input_dim = embed_dim + num_parents * (9 + 3 + 9) 
-            fc = nn.Sequential(nn.Linear(input_dim, embed_dim // 2),
-                                            self.activation,
-                                            nn.Linear(embed_dim // 2, self.joint_dim))
-                                            #   nn.Linear(embed_dim // 2, 3))
-                                            #   nn.Linear(embed_dim // 2, 9)))
-            fc[-1].weight.data.uniform_(-init_val, init_val)
-            fc[-1].bias.data.zero_()
-            self.fc_pose.append(fc)
-            
-    def immediate_parent_to_all_ancestors(self,immediate_parents=[-1,0,0,0,1,2,3,4,5,6,7,8,9,9,9,12,13,14,16,17,18,19,20,21]):
-        """
-        :param immediate_parents: list with len = num joints, contains index of each joint's parent.
-                - includes root joint, but its parent index is -1.
-        :return: ancestors_dict: dict of lists, dict[joint] is ordered list of parent joints.
-                - DOES NOT INCLUDE ROOT JOINT! Joint 0 here is actually joint 1 in SMPL.
-        """
-        ancestors_dict = defaultdict(list)
-        for i in range(1, len(immediate_parents)):  # Excluding root joint
-            joint = i - 1
-            immediate_parent = immediate_parents[i] - 1
-            if immediate_parent >= 0:
-                ancestors_dict[joint] += [immediate_parent] + ancestors_dict[immediate_parent]
-        return ancestors_dict
-
-    # def forward(self,shape_params, glob, cam):
-    def forward(self, glob):
-        # Pose
-        embed = self.activation(self.fc_embed(torch.cat([glob], dim=1)))  # (bsize, embed dim)
-        batch_size = embed.shape[0]
-        pose_F = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
-        pose_U = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
-        pose_S = torch.zeros(batch_size, self.num_joints, 3, device=self.device)  # (bsize, 23, 3)
-        pose_V = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
-        pose_U_proper = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
-        pose_S_proper = torch.zeros(batch_size, self.num_joints, 3, device=self.device)  # (bsize, 23, 3)
-        pose_rotmats_mode = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
-        for joint in range(self.num_joints):
-            parents = self.parents_dict[joint]
-            fc_joint = self.fc_pose[joint]
-            if len(parents) > 0:
-                parents_U_proper = pose_U_proper[:, parents, :, :].view(batch_size, -1)  # (bsize, num parents * 3 * 3)
-                parents_S_proper = pose_S_proper[:, parents, :].view(batch_size, -1)  # (bsize, num parents * 3)
-                parents_mode = pose_rotmats_mode[:, parents, :, :].view(batch_size, -1)  # (bsize, num parents * 3 * 3)
-
-                joint_F = fc_joint(torch.cat([embed, parents_U_proper, parents_S_proper, parents_mode], dim=1))
-            else:
-                joint_F = fc_joint(embed)
-            # joint_F = self.rodriguez(joint_F)
-            joint_F = joint_F.view(-1,3,3)
-
-            joint_U, joint_S, joint_V = torch.svd(joint_F.view(-1,3,3).cpu())  # (bsize, 3, 3), (bsize, 3), (bsize, 3, 3)
-
-            with torch.no_grad():
-                det_joint_U, det_joint_V = torch.det(joint_U).to(self.device), torch.det(joint_V).to(self.device)  # (bsize,), (bsize,)
-            joint_U, joint_S, joint_V = joint_U.to(self.device), joint_S.to(self.device), joint_V.to(self.device)
-
-            # "Proper" SVD
-            joint_U_proper = joint_U.clone()
-            joint_S_proper = joint_S.clone()
-            joint_V_proper = joint_V.clone()
-            # Ensure that U_proper and V_proper are rotation matrices (orthogonal with det = 1).
-            joint_U_proper[:, :, 2] *= det_joint_U.unsqueeze(-1)
-            joint_S_proper[:, 2] *= det_joint_U * det_joint_V
-            joint_V_proper[:, :, 2] *= det_joint_V.unsqueeze(-1)
-
-            joint_rotmat_mode = torch.matmul(joint_U_proper, joint_V_proper.transpose(dim0=-1, dim1=-2))
-
-            pose_F[:, joint, :, :] = joint_F
-            pose_U[:, joint, :, :] = joint_U
-            pose_S[:, joint, :] = joint_S
-            pose_V[:, joint, :, :] = joint_V
-            pose_U_proper[:, joint, :, :] = joint_U_proper
-            pose_S_proper[:, joint, :] = joint_S_proper
-            pose_rotmats_mode[:, joint, :, :] = joint_rotmat_mode
-
-        return {
-            "Rs": pose_F,
-            "pose_U":pose_U,
-            "pose_S":pose_S,
-            "pose_V":pose_V,
-        }
-
-
-class RodriguesModule(nn.Module):
-    def forward(self, rvec):
-        r''' Apply Rodriguez formula on a batch of rotation vectors.
-
-            Args:
-                rvec: Tensor (B, 3)
-            
-            Returns
-                rmtx: Tensor (B, 3, 3)
-        '''
-        theta = torch.sqrt(1e-5 + torch.sum(rvec ** 2, dim=1))
-        rvec = rvec / theta[:, None]
-        costh = torch.cos(theta)
-        sinth = torch.sin(theta)
-        return torch.stack((
-            rvec[:, 0] ** 2 + (1. - rvec[:, 0] ** 2) * costh,
-            rvec[:, 0] * rvec[:, 1] * (1. - costh) - rvec[:, 2] * sinth,
-            rvec[:, 0] * rvec[:, 2] * (1. - costh) + rvec[:, 1] * sinth,
-
-            rvec[:, 0] * rvec[:, 1] * (1. - costh) + rvec[:, 2] * sinth,
-            rvec[:, 1] ** 2 + (1. - rvec[:, 1] ** 2) * costh,
-            rvec[:, 1] * rvec[:, 2] * (1. - costh) - rvec[:, 0] * sinth,
-
-            rvec[:, 0] * rvec[:, 2] * (1. - costh) - rvec[:, 1] * sinth,
-            rvec[:, 1] * rvec[:, 2] * (1. - costh) + rvec[:, 0] * sinth,
-            rvec[:, 2] ** 2 + (1. - rvec[:, 2] ** 2) * costh), 
-        dim=1).view(-1, 3, 3)
+ 
  
 class GaussianModel:
     def setup_functions(self):
@@ -388,7 +211,7 @@ class GaussianModel:
                 {'params': [self._rotation], 'lr': training_args.rotation_lr, "name": "rotation"}
             ]
         else:
-            # Highlight_autoregression
+            # Highlight_lr
             l = [
                 {'params': [self._xyz], 'lr': training_args.position_lr_init * self.spatial_lr_scale, "name": "xyz"},
                 {'params': [self._features_dc], 'lr': training_args.feature_lr, "name": "f_dc"},
@@ -958,8 +781,8 @@ class GaussianModel:
             if return_transl: 
                 translation -= pose_offsets
 
-            # From mean shape to normal shape
-            shapedirs = self.SMPL_NEUTRAL['shapedirs'][..., :params['shapes'].shape[-1]]#.cuda()
+            # From mean shape to normal shape  torch.Size([6890, 3, 10])
+            shapedirs = self.SMPL_NEUTRAL['shapedirs'][..., :params['shapes'].shape[-1]]#.cuda()  
             shape_offset = torch.matmul(shapedirs.unsqueeze(0), torch.reshape(params['shapes'].cuda(), (batch_size, 1, -1, 1))).squeeze(-1)
             shape_offset = torch.gather(shape_offset, 1, vert_ids.expand(-1, -1, 3)) # [bs, N_rays*N_samples, 3]
             query_pts = query_pts + shape_offset
@@ -973,20 +796,20 @@ class GaussianModel:
             ident = torch.eye(3).cuda().float()
             batch_size = pose_.shape[0]
             rot_mats = batch_rodrigues(pose_.view(-1, 3)).view([batch_size, -1, 3, 3])
-
+ 
             if correct_Rs is not None:
                 rot_mats_no_root = rot_mats[:, 1:]
                 rot_mats_no_root = torch.matmul(rot_mats_no_root.reshape(-1, 3, 3), correct_Rs.reshape(-1, 3, 3)).reshape(-1, joints_num-1, 3, 3)
                 rot_mats = torch.cat([rot_mats[:, 0:1], rot_mats_no_root], dim=1)
-
+    
             pose_feature = (rot_mats[:, 1:, :, :] - ident).view([batch_size, -1])  #.cuda()
-            
-            # torch.Size([1, 207])
+    
+            # torch.Size([1, 207])    #  posedirs torch.Size([1, 207, 20670])
             pose_offsets = torch.matmul(pose_feature.unsqueeze(1), posedirs.view(vertices_num*3, -1).transpose(1,0).unsqueeze(0)).view(batch_size, -1, 3)
             pose_offsets = torch.gather(pose_offsets, 1, vert_ids.expand(-1, -1, 3)) # [bs, N_rays*N_samples, 3]
             query_pts = query_pts + pose_offsets
 
-            if return_transl: 
+            if return_transl:
                 translation += pose_offsets
 
         # get tar_pts, smpl space source pose

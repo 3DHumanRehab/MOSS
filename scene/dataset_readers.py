@@ -554,21 +554,26 @@ def readCamerasZJUMoCapRefine(path, output_view, white_background, image_scaling
     
     # Highlight_debug
     
-    if split == 'train':
-        pose_interval = 5
-        pose_num = 100
-    elif split == 'test':
-        pose_start = 0
-        pose_interval = 30
-        pose_num = 17
+    if True:
+        if split == 'train':
+            pose_interval = 5
+            pose_num = 100
+        elif split == 'test':
+            pose_start = 0
+            pose_interval = 30
+            pose_num = 17
 
-    # if split == 'train':
-    #     pose_interval = 5
-    #     pose_num = 1
-    # elif split == 'test':
-    #     pose_start = 0
-    #     pose_interval = 30
-    #     pose_num = 17
+    else:
+        print("============================")
+        print("debug...")
+        print("============================")
+        if split == 'train':
+            pose_interval = 5
+            pose_num = 1
+        elif split == 'test':
+            pose_start = 0
+            pose_interval = 30
+            pose_num = 17
 
     #./my_392/annots.npy
     ann_file = os.path.join(path, 'annots.npy')

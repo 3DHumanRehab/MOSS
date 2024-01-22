@@ -86,7 +86,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         # Every 1000 its we increase the levels of SH up to a maximum degree
         if iteration % 1000 == 0:
-            gaussians.oneupSHdegree() #
+            gaussians.oneupSHdegree() 
 
         # Start timer
         start_time = time.time()
@@ -173,7 +173,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                     gaussians.densify_and_prune(opt.densify_grad_threshold, 0.005, scene.cameras_extent, size_threshold, kl_threshold=0.4, t_vertices=viewpoint_cam.big_pose_world_vertex, iter=iteration)
                     # gaussians.densify_and_prune(opt.densify_grad_threshold, 0.01, scene.cameras_extent, 1)
                 if iteration % opt.opacity_reset_interval == 0 or (dataset.white_background and iteration == opt.densify_from_iter):
-                    gaussians.reset_opacity()
+                    gaussians.reset_opacity()  # TODO:
 
             # Optimizer step
             if iteration < opt.iterations:
@@ -253,10 +253,11 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
                     smpl_rot[config['name']][viewpoint.pose_id]['translation'] = render_output['translation']
 
                 l1_test /= len(config['cameras']) 
-                psnr_test /= len(config['cameras'])   
+                psnr_test /= len(config['cameras'])
                 ssim_test /= len(config['cameras'])
-                lpips_test /= len(config['cameras'])      
-                print("\n[ITER {}] Evaluating {} #{}: L1 {} PSNR {} SSIM {} LPIPS {}".format(iteration, config['name'], len(config['cameras']), l1_test, psnr_test, ssim_test*100, lpips_test*1000))
+                lpips_test /= len(config['cameras'])
+                print("\n[ITER {}] Evaluating {} #{}: L1 {} PSNR  SSIM  LPIPS ".format(iteration, config['name'], len(config['cameras']), l1_test))
+                print(psnr_test.item(), ssim_test.item(), lpips_test.item()*1000)
                 if tb_writer:
                     tb_writer.add_scalar(config['name'] + '/loss_viewpoint - l1_loss', l1_test, iteration)
                     tb_writer.add_scalar(config['name'] + '/loss_viewpoint - psnr', psnr_test, iteration)
@@ -284,7 +285,9 @@ if __name__ == "__main__":
     parser.add_argument('--port', type=int, default=6009)
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
-    parser.add_argument("--test_iterations", nargs="+", type=int, default=[1_200, 2_000, 3_000, 4_000])
+    # parser.add_argument("--test_iterations", nargs="+", type=int, default=[1_200, 2_000, 3_000, 4_000])
+    # parser.add_argument("--test_iterations", nargs="+", type=int, default=[2_000, 2500, 3_000, 4_000])
+    parser.add_argument("--test_iterations", nargs="+", type=int, default=[3200,3400,3600, 4_000])
     parser.add_argument("--save_iterations", nargs="+", type=int, default=[1_200, 2_000, 3_000, 4_000])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])

@@ -64,17 +64,19 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     else:
         if transforms is None:
             # highlight_train
-            if True:
-                pose_out = pc.auto_regression(viewpoint_camera.smpl_param['poses'],)       # torch.Size([1, 72])
-                pose_out['target_R'] = viewpoint_camera.smpl_param['pose_rotmats']
-                correct_Rs =pose_out['Rs'].reshape(1,23,3,3)
+            # Ours
+            pose_out = pc.auto_regression(viewpoint_camera.smpl_param['poses'],)       # torch.Size([1, 72])
+            pose_out['target_R'] = viewpoint_camera.smpl_param['pose_rotmats']
+            correct_Rs =pose_out['Rs'].reshape(1,23,3,3)
 
-                lbs_weights = pc.cross_attention_lbs(means3D[None],correct_Rs)
-            else: 
-                pose_out = pc.pose_decoder(viewpoint_camera.smpl_param['poses'][:, 3:])
-                correct_Rs = pose_out['Rs']
-                lbs_weights = pc.weight_offset_decoder(means3D[None].detach()) # torch.Size([1, 6890, 3])
-                lbs_weights = lbs_weights.permute(0,2,1)                       # torch.Size([1, 6890, 24])
+            lbs_weights = pc.cross_attention_lbs(means3D[None],correct_Rs)
+                
+            # Baseline
+            # pose_out = pc.pose_decoder(viewpoint_camera.smpl_param['poses'][:, 3:])
+            # correct_Rs = pose_out['Rs']
+            
+            # lbs_weights = pc.weight_offset_decoder(means3D[None].detach()) # torch.Size([1, 6890, 3])
+            # lbs_weights = lbs_weights.permute(0,2,1)                       # torch.Size([1, 6890, 24])
 
             # transform points
             # torch.Size([1, 6890, 3])

@@ -51,9 +51,9 @@ class CrossAttention_lbs(nn.Module):
 
         return output
 
-# class CrossAttention_lbs(nn.Module):
+# class CrossAttention_lbs_without_bias(nn.Module):
 #     def __init__(self, feature_dim=24,mesh_dim = 3,rot_dim = 3, num_heads=3,):
-#         super(CrossAttention_lbs, self).__init__()
+#         super(CrossAttention_lbs_without_bias, self).__init__()
         
 #         self.feature_dim = feature_dim
 #         self.query = nn.Linear(mesh_dim, feature_dim)

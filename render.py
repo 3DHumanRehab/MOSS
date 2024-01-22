@@ -76,7 +76,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         if not index%10:
             gaussians.save_ply_with_mesh(os.path.join(ply_path, '{0:05d}'.format(index) + ".ply"),render_output["means3D"])
             gaussians.save_tensor(os.path.join(depth_path, '{0:05d}'.format(index) + ".png"),render_output["render_depth"])
-            gaussians.save_tensor(os.path.join(alpha_path, '{0:05d}'.format(index) + ".png"),render_output["render_alpha"],)
+            gaussians.save_tensor(os.path.join(alpha_path, '{0:05d}'.format(index) + ".png"),render_output["render_alpha"])
 
     # Calculate elapsed time
     print("Elapsed time: ", elapsed_time, " FPS: ", len(views)/elapsed_time) 
@@ -103,7 +103,9 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     lpipss /= len(views)
 
     # evalution metrics
-    print("\n[ITER {}] Evaluating {} #{}: PSNR {} SSIM {} LPIPS {}".format(iteration, name, len(views), psnrs, ssims*100, lpipss*1000))
+    print("\n[ITER {}] Evaluating {} #{}: PSNR  SSIM   LPIPS  ".format(iteration, name, len(views)))
+    print(f"{psnrs.item(), ssims.item(), lpipss.item()*1000}")
+
 
 def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParams, skip_train : bool, skip_test : bool):
     with torch.no_grad():
