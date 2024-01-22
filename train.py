@@ -66,6 +66,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
     render_pkg = None
     viewpoint_cam = None
+    joint_rotation = torch.zeros((1,23,3,3)).to('cuda')
     for iteration in range(first_iter, opt.iterations + 1):
         if network_gui.conn == None:
             network_gui.try_connect()
@@ -95,7 +96,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         if not viewpoint_stack:
             viewpoint_stack = scene.getTrainCameras().copy()
         viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
-        
+
         # Render
         if (iteration - 1) == debug_from:
             pipe.debug = True
@@ -121,11 +122,15 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         s3im_loss = s3im_fun(img_pred, img_gt)
         
         data = render_pkg['pose_out']
-        pred_F,pred_U,pred_S,pred_V,target_R = data['Rs'],data['pose_U'],data['pose_S'],data['pose_V'],data['target_R']
+        pred_F,pred_U,pred_S,pred_V,target_R = data['pose_F'],data['pose_U'],data['pose_S'],data['pose_V'],data['target_R']
+        joint_rotation += pred_F.reshape(1,23,3,3)
         nll_loss = matrix_fisher_nll(pred_F,pred_U,pred_S,pred_V,target_R)
         nll_loss = nll_loss.mean()   # tensor(4.1514e-07)
 
-        loss = Ll1 + 0.5 * mask_loss + 0.01 * (1.0 - ssim_loss) + 0.01 * lpips_loss + 0.01 * nll_loss +0.01 * s3im_loss
+        # loss = Ll1 + 0.5 * mask_loss + 0.01 * (1.0 - ssim_loss) + 0.01 * lpips_loss + 0.01 *  nll_loss
+        loss = Ll1 + 0.5 * mask_loss + 0.01 * (1.0 - ssim_loss) + 0.01 * lpips_loss + 0.01 *  nll_loss + 0.01 * s3im_loss
+        # loss = Ll1 + 0.5 * mask_loss + 0.01 * (1.0 - ssim_loss) + 0.01 * lpips_loss +0.01 * s3im_loss
+        # loss = Ll1 + 0.5 * mask_loss + 0.01 * (1.0 - ssim_loss) + 0.01 * lpips_loss 
         loss.backward()
 
         # end time
@@ -170,7 +175,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
                 if iteration > opt.densify_from_iter and iteration % opt.densification_interval == 0:
                     size_threshold = 20 if iteration > opt.opacity_reset_interval else None
-                    gaussians.densify_and_prune(opt.densify_grad_threshold, 0.005, scene.cameras_extent, size_threshold, kl_threshold=0.4, t_vertices=viewpoint_cam.big_pose_world_vertex, iter=iteration)
+                    gaussians.densify_and_prune(opt.densify_grad_threshold, joint_rotation, 0.005, scene.cameras_extent, size_threshold, kl_threshold=0.4, t_vertices=viewpoint_cam.big_pose_world_vertex, iter=iteration)
                     # gaussians.densify_and_prune(opt.densify_grad_threshold, 0.01, scene.cameras_extent, 1)
                 if iteration % opt.opacity_reset_interval == 0 or (dataset.white_background and iteration == opt.densify_from_iter):
                     gaussians.reset_opacity()
@@ -256,7 +261,7 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
                 psnr_test /= len(config['cameras'])   
                 ssim_test /= len(config['cameras'])
                 lpips_test /= len(config['cameras'])      
-                print("\n[ITER {}] Evaluating {} #{}: L1 {} PSNR {} SSIM {} LPIPS {}".format(iteration, config['name'], len(config['cameras']), l1_test, psnr_test, ssim_test*100, lpips_test*1000))
+                print("\n[ITER {}] Evaluating {} #{}: L1 {} PSNR {} SSIM {} LPIPS {}".format(iteration, config['name'], len(config['cameras']), l1_test, psnr_test, ssim_test, lpips_test*1000))
                 if tb_writer:
                     tb_writer.add_scalar(config['name'] + '/loss_viewpoint - l1_loss', l1_test, iteration)
                     tb_writer.add_scalar(config['name'] + '/loss_viewpoint - psnr', psnr_test, iteration)
@@ -284,8 +289,10 @@ if __name__ == "__main__":
     parser.add_argument('--port', type=int, default=6009)
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
-    parser.add_argument("--test_iterations", nargs="+", type=int, default=[1_200, 2_000, 3_000, 4_000])
+    parser.add_argument("--test_iterations", nargs="+", type=int, default=[1_200, 2_000,2300,2500,2700, 3_000, 4_000])
+    # parser.add_argument("--test_iterations", nargs="+", type=int, default=[1_200, 2_000, 3_000, 4_000])
     parser.add_argument("--save_iterations", nargs="+", type=int, default=[1_200, 2_000, 3_000, 4_000])
+    
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)

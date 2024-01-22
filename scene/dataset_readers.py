@@ -554,21 +554,25 @@ def readCamerasZJUMoCapRefine(path, output_view, white_background, image_scaling
     
     # Highlight_debug
     
-    if split == 'train':
-        pose_interval = 5
-        pose_num = 100
-    elif split == 'test':
-        pose_start = 0
-        pose_interval = 30
-        pose_num = 17
-
-    # if split == 'train':
-    #     pose_interval = 5
-    #     pose_num = 1
-    # elif split == 'test':
-    #     pose_start = 0
-    #     pose_interval = 30
-    #     pose_num = 17
+    if True:
+        if split == 'train':
+            pose_interval = 5
+            pose_num = 100
+        elif split == 'test':
+            pose_start = 0
+            pose_interval = 30
+            pose_num = 17
+    else:
+        print("=====================================")
+        print("On the debug ")
+        print("=====================================")
+        if split == 'train':
+            pose_interval = 5
+            pose_num = 1
+        elif split == 'test':
+            pose_start = 0
+            pose_interval = 30
+            pose_num = 17
 
     #./my_392/annots.npy
     ann_file = os.path.join(path, 'annots.npy')
@@ -684,11 +688,7 @@ def readCamerasZJUMoCapRefine(path, output_view, white_background, image_scaling
             smpl_param['shapes'] = smpl_param['shapes'].astype(np.float32)
             smpl_param['poses'] = smpl_param['poses'].astype(np.float32)
             
-            original_str = f"{i}"
-            json_path = path+"/easymocap/output-smpl-3d/smpl/"+original_str.zfill(6)+'.json'
-            with open(json_path, 'r') as file:
-                data = json.load(file)
-            smpl_param['pose_rotmats'] = batch_rodrigues(torch.tensor(data['annots'][0]['poses'][0]).contiguous().view(-1, 3)).view(23, 3, 3)
+            smpl_param['pose_rotmats'] = batch_rodrigues(torch.tensor(smpl_param['poses'][0][3:]).contiguous().view(-1, 3)).view(23, 3, 3)
             
             # smpl_param['pose_rotmats'] = batch_rodrigues(torch.tensor(smpl_param['poses']).contiguous().view(-1, 3)).view(24, 3, 3)
 

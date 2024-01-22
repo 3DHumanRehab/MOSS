@@ -165,7 +165,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
                 if iteration > opt.densify_from_iter and iteration % opt.densification_interval == 0:
                     size_threshold = 20 if iteration > opt.opacity_reset_interval else None
-                    gaussians.densify_and_prune(opt.densify_grad_threshold, 0.005, scene.cameras_extent, size_threshold, kl_threshold=0.4, t_vertices=viewpoint_cam.big_pose_world_vertex, iter=iteration)
+                    # gaussians.densify_and_prune(opt.densify_grad_threshold,0.005, scene.cameras_extent, size_threshold, kl_threshold=0.4, t_vertices=viewpoint_cam.big_pose_world_vertex, iter=iteration)
+                    gaussians.densify_and_prune(opt.densify_grad_threshold,opt.densify_grad_threshold,0.005, scene.cameras_extent, size_threshold, kl_threshold=0.4, t_vertices=viewpoint_cam.big_pose_world_vertex, iter=iteration)
                     # gaussians.densify_and_prune(opt.densify_grad_threshold, 0.01, scene.cameras_extent, 1)
                 if iteration % opt.opacity_reset_interval == 0 or (dataset.white_background and iteration == opt.densify_from_iter):
                     gaussians.reset_opacity()
@@ -257,7 +258,7 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
                 psnr_test /= len(config['cameras'])   
                 ssim_test /= len(config['cameras'])
                 lpips_test /= len(config['cameras'])      
-                print("\n[ITER {}] Evaluating {} #{}: L1 {} PSNR {} SSIM {} LPIPS {}".format(iteration, config['name'], len(config['cameras']), l1_test, psnr_test, ssim_test*100, lpips_test*1000))
+                print("\n[ITER {}] Evaluating {} #{}: L1 {} PSNR {} SSIM {} LPIPS {}".format(iteration, config['name'], len(config['cameras']), l1_test, psnr_test, ssim_test, lpips_test*1000))
                 if tb_writer:
                     tb_writer.add_scalar(config['name'] + '/loss_viewpoint - l1_loss', l1_test, iteration)
                     tb_writer.add_scalar(config['name'] + '/loss_viewpoint - psnr', psnr_test, iteration)
@@ -292,11 +293,11 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
     # sys_list = ['-s', '/root/workspace/Caixiang/GauHuman-main/my_392', '--eval', '--exp_name', 'zju_mocap_refine/my_392_100_pose_correction_lbs_offset_split_clone_merge_prune', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '2000']
-    # name_list = ['392']
-    name_list = ['387','392','393','394']
+    name_list = ['392']
+    # name_list = ['387','392','393','394']
     for name in name_list:
         print("Train on",name)
-        sys_list = ['-s', f'/HOME/HOME/data/ZJU-MoCap/my_{name}', '--eval', '--exp_name', f'zju_mocap_refine/my_{name}_baseline', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '1200']
+        sys_list = ['-s', f'/HOME/HOME/data/ZJU-MoCap/my_{name}', '--eval', '--exp_name', f'zju_mocap_refine/my_{name}_baseline', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '3000']
         args = parser.parse_args(sys_list)
         # print("====="*88)
         # print('sys.argv[1:]',sys.argv[1:])

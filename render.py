@@ -8,12 +8,13 @@
 #
 # For inquiries contact  george.drettakis@inria.fr
 #
-
 import torch
 from scene import Scene
 import os
 import time
 import pickle
+import numpy as np
+import copy
 from tqdm import tqdm
 from os import makedirs
 from gaussian_renderer import render
@@ -46,7 +47,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     rgbs_gt = []
     elapsed_time = 0
     # import copy
-    # temp_view = copy.deepcopy(views[0])
+    temp_view = copy.deepcopy(views[0])
 
     for index, view in enumerate(tqdm(views, desc="Rendering progress")):
         gt = view.original_image[0:3, :, :].cuda()
@@ -58,6 +59,15 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         # view.FoVy = new_view.FoVy
         # view.world_view_transform = new_view.world_view_transform
         # view.full_proj_transform = new_view.full_proj_transform
+        
+        theta = 45
+
+        rotation_matrix = np.array([[1, 0, 0],
+                                    [0, np.cos(theta), -np.sin(theta)],
+                                    [0, np.sin(theta), np.cos(theta)]])
+        rotated_point = torch.tensor(rotation_matrix,dtype=torch.float32).cuda() @ view.camera_center
+
+        # view.camera_center = rotated_point
         # view.camera_center = new_view.camera_center
         # Start timer
         start_time = time.time()
@@ -162,5 +172,5 @@ if __name__ == "__main__":
 
     # Initialize system state (RNG)
     safe_state(args.quiet)
-
+ 
     render_sets(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test)

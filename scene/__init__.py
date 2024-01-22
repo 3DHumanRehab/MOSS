@@ -97,8 +97,15 @@ class Scene:
             print("===="*8)
             if os.path.exists(model_path):
                 ckpt = torch.load(model_path, map_location='cuda:0')
-                self.gaussians.auto_regression.load_state_dict(ckpt['Autoregression'])
-                self.gaussians.cross_attention_lbs.load_state_dict(ckpt['CrossAttention_lbs'])
+                try:
+                    self.gaussians.auto_regression.load_state_dict(ckpt['Autoregression'])
+                except:
+                    print("Don't load Autoregression")
+                try:
+                    self.gaussians.cross_attention_lbs.load_state_dict(ckpt['CrossAttention_lbs'])
+                except:
+                    print("Don't load CrossAttention_lbs")
+                    
                 self.gaussians.pose_decoder.load_state_dict(ckpt['pose_decoder'])
                 self.gaussians.weight_offset_decoder.load_state_dict(ckpt['weight_offset_decoder'])
 
