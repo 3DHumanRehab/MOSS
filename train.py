@@ -33,7 +33,7 @@ except ImportError:
 
 loss_fn_vgg = lpips.LPIPS(net='vgg').to(torch.device('cuda', torch.cuda.current_device()))
 
-def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from):
+def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from,file):
     first_iter = 0
     tb_writer = prepare_output_and_logger(dataset)
     gaussians = GaussianModel(dataset.sh_degree, dataset.smpl_type, dataset.motion_offset_flag, dataset.actor_gender)
@@ -107,6 +107,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             lbs_weights = render_pkg['lbs_weights']
         else:
             lbs_weights += render_pkg['lbs_weights']
+
         # Loss
         gt_image = viewpoint_cam.original_image.cuda()
         bkgd_mask = viewpoint_cam.bkgd_mask.cuda()
@@ -122,7 +123,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         ssim_loss = ssim(img_pred, img_gt)
         # lipis loss
         lpips_loss = loss_fn_vgg(img_pred, img_gt).reshape(-1)
-        
+
         s3im_loss = s3im_fun(img_pred, img_gt)
         
         data = render_pkg['pose_out']
@@ -131,9 +132,12 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         nll_loss = matrix_fisher_nll(pred_F,pred_U,pred_S,pred_V,target_R)
         nll_loss = nll_loss.mean()   # tensor(4.1514e-07)
 
-        loss = Ll1 + 0.5 * mask_loss + 0.01 * (1.0 - ssim_loss) + 0.01 * lpips_loss + 0.01 * nll_loss +0.01 * s3im_loss
+        # loss = Ll1 + 0.5 * mask_loss + 0.01 * (1.0 - ssim_loss) + 0.01 * lpips_loss + 0.01 * nll_loss +0.01 * s3im_loss
+        # loss = Ll1 + 0.01 * nll_loss + 0.01 * s3im_loss
+        loss = Ll1 + 0.1 * nll_loss + 0.1 * s3im_loss
+        # loss = Ll1 + 0.5 * mask_loss + (0.01 * (1.0 - ssim_loss) + 0.01 * lpips_loss + 0.01 * nll_loss +0.01 * s3im_loss)*10
         loss.backward()
-
+    
         # end time
         end_time = time.time()
         # Calculate elapsed time
@@ -166,6 +170,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             if (iteration in saving_iterations):
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
                 scene.save(iteration)
+
             # Start timer
             start_time = time.time()
             # Densification
@@ -179,12 +184,11 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                     size_threshold = 20 if iteration > opt.opacity_reset_interval else None
                     # gaussians.densify_and_prune(opt.densify_grad_threshold, 0.005, scene.cameras_extent, size_threshold, kl_threshold=0.4, t_vertices=viewpoint_cam.big_pose_world_vertex, iter=iteration)
                     gaussians.densify_and_prune(opt.densify_grad_threshold,joint_F,lbs_weights,0.005, scene.cameras_extent, size_threshold, kl_threshold=0.4, t_vertices=viewpoint_cam.big_pose_world_vertex, iter=iteration)
-                    # gaussians.densify_and_prune(opt.densify_grad_threshold, 0.01, scene.cameras_extent, 1)
                     # init data
                     lbs_weights = None
                     joint_F = torch.zeros(23,3,3).to('cuda')
                 if iteration % opt.opacity_reset_interval == 0 or (dataset.white_background and iteration == opt.densify_from_iter):
-                    gaussians.reset_opacity()  # TODO:
+                    gaussians.reset_opacity()
 
             # Optimizer step
             if iteration < opt.iterations:
@@ -263,13 +267,21 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
                     smpl_rot[config['name']][viewpoint.pose_id]['transforms'] = render_output['transforms']
                     smpl_rot[config['name']][viewpoint.pose_id]['translation'] = render_output['translation']
 
-                l1_test /= len(config['cameras']) 
+                l1_test /= len(config['cameras'])
                 psnr_test /= len(config['cameras'])
                 ssim_test /= len(config['cameras'])
                 lpips_test /= len(config['cameras'])
                 print("==========="*8)
-                print("\n[ITER {}] Evaluating {} #{}: L1 {} PSNR  SSIM  LPIPS ".format(iteration, config['name'], len(config['cameras']), l1_test))
+                print("\n[ITER {}] Evaluating {} #{}: L1 {} PSNR  SSIM  LPIPS".format(iteration, config['name'], len(config['cameras']), l1_test))
                 print(psnr_test.item(), ssim_test.item(), lpips_test.item()*1000)
+                
+                if config['name']=="test":
+                    file.write("==========="*8)
+                    file.write("\n[ITER {}] Evaluating {} #{}: L1 {} PSNR  SSIM  LPIPS".format(iteration, config['name'], len(config['cameras']), l1_test))
+                    context = f'{psnr_test.item()} {ssim_test.item()} {lpips_test.item()*1000}'
+                    file.write(context)
+                    print('\n')
+                    
                 if tb_writer:
                     tb_writer.add_scalar(config['name'] + '/loss_viewpoint - l1_loss', l1_test, iteration)
                     tb_writer.add_scalar(config['name'] + '/loss_viewpoint - psnr', psnr_test, iteration)
@@ -299,33 +311,41 @@ if __name__ == "__main__":
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
     # parser.add_argument("--test_iterations", nargs="+", type=int, default=[1_200, 2_000, 3_000, 4_000])
     # parser.add_argument("--test_iterations", nargs="+", type=int, default=[2_000, 2500, 3_000, 4_000])
-    parser.add_argument("--test_iterations", nargs="+", type=int, default=[3200,3400,3600, 4_000])
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[1_200, 2_000, 3_000, 4_000])
+    parser.add_argument("--test_iterations", nargs="+", type=int, default=[2_200,2500,2700, 3_000,3200,3400,3600])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[2_200,2500,2700, 3_000,3200,3400,3600])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
-    name_list = ['392']
-    # name_list = ['387','392','393','394']
+    
+    # name_list = ['386']
+    name_list = ['377','386','387','392','393','394']
+    
+    # file_name = 'lr5_01nll_loss01_s3im_loss.txt'
+    file_name = 'temp.txt'
+    save_path = f'/HOME/HOME/Caixiang/GauHuman/result/{file_name}'
+    file = open(save_path, 'a')
     for name in name_list:
         print("Train on",name)
-        sys_list = ['-s', f'/HOME/HOME/data/ZJU-MoCap/my_{name}', '--eval', '--exp_name', f'zju_mocap_refine/my_{name}_Fisher_CA', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '4000']
+        file.write(name)
+        sys_list = ['-s', f'/HOME/HOME/data/ZJU-MoCap/my_{name}', '--eval', '--exp_name', f'zju_mocap_refine/my_{name}_{file_name[:-4]}', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '3600']
         args = parser.parse_args(sys_list)
         # print("====="*88)
         # print('sys.argv[1:]',sys.argv[1:])
         # print("====="*88)
 
         args.save_iterations.append(args.iterations)
-        
+
         print("Optimizing " + args.model_path)
         # Initialize system state (RNG)
         safe_state(args.quiet)
-        
+
         # Start GUI server, configure and run training
         # network_gui.init(args.ip, args.port)
         torch.autograd.set_detect_anomaly(args.detect_anomaly)
-        training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from)
+        training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from,file)
 
-        # All done
-        print("\nTraining complete.")
+    # All done
+    file.close()
+    print("\nTraining complete.")
   
 

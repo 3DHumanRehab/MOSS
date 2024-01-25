@@ -35,6 +35,8 @@ class CrossAttention_lbs(nn.Module):
                 net = torch.cat((features, net), dim=1)
         query = self.bw_fc(net).permute(0,2,1)
         
+        # torch.cat([torch.zeros
+        # torch.ones
         key = torch.cat([torch.zeros(1,1,3,3).cuda(),key],dim=1).reshape(1,24,9)
  
         value = key

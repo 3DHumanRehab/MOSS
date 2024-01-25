@@ -9,7 +9,7 @@
 # For inquiries contact  george.drettakis@inria.fr
 #
 import copy
-
+import cv2
 import torch
 import torchvision
 from collections import defaultdict
@@ -220,6 +220,7 @@ class GaussianModel:
                 {'params': [self._scaling], 'lr': training_args.scaling_lr, "name": "scaling"},
                 {'params': [self._rotation], 'lr': training_args.rotation_lr, "name": "rotation"},
                 {'params': self.pose_decoder.parameters(), 'lr': training_args.pose_refine_lr, "name": "pose_decoder"},
+                # {'params': self.auto_regression.parameters(),'lr':training_args.pose_refine_lr*5,"name":"auto_regression"},
                 {'params': self.auto_regression.parameters(),'lr':training_args.pose_refine_lr*5,"name":"auto_regression"},
                 # {'params': self.auto_regression.parameters(),'lr':training_args.pose_refine_lr,"name":"auto_regression"},
                 # {'params': self.auto_regression.parameters(),'lr':0.00001,"name":"auto_regression"},
@@ -349,7 +350,12 @@ class GaussianModel:
 
     def save_tensor(self,path,data):
         mkdir_p(os.path.dirname(path))
-        torchvision.utils.save_image(data,path)
+        # torchvision.utils.save_image(data,path)
+        data = data.squeeze(0).cpu().detach().numpy()
+        data=data*255/data.max()
+        data=np.uint8(data)
+        data = cv2.applyColorMap(data, 2)
+        cv2.imwrite(path,data)
 
     def reset_opacity(self):
         opacities_new = inverse_sigmoid(torch.min(self.get_opacity, torch.ones_like(self.get_opacity)*0.01))
@@ -574,7 +580,7 @@ class GaussianModel:
 
         self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacity, new_scaling, new_rotation)
 
-    def kl_densify_and_split(self, grads,rot_joint, grad_threshold, scene_extent, kl_threshold=0.4, N=2):
+    def kl_densify_and_split(self, grads, grad_threshold, scene_extent, kl_threshold=0.4, N=2):
         n_init_points = self.get_xyz.shape[0]
         # Extract points that satisfy the gradient condition
         padded_grad = torch.zeros((n_init_points), device="cuda")
@@ -683,6 +689,9 @@ class GaussianModel:
             joint_V[:, :, 2] *= det_joint_V.unsqueeze(-1)
         
         rot_joint = torch.matmul(joint_U, joint_V.transpose(dim0=-1, dim1=-2))
+        # rot_joint = rot_joint.reshape(23,9)   # TODO:使用target rot  debug 查看根节点的旋转矩阵
+        # rot_joint = (lbs_weights[0,:,1:]@rot_joint).reshape(-1,3,3)
+        
         rot_joint = torch.cat([torch.zeros(1,3,3).cuda(),rot_joint],dim=0).reshape(24,9)   # TODO:使用target rot  debug 查看根节点的旋转矩阵
         rot_joint = (lbs_weights[0]@rot_joint).reshape(-1,3,3)
 
@@ -691,7 +700,7 @@ class GaussianModel:
         # self.densify_and_clone(grads, max_grad, extent)
         # self.densify_and_split(grads, max_grad, extent)
         self.kl_densify_and_clone(grads,rot_joint, max_grad, extent, kl_threshold)
-        self.kl_densify_and_split(grads,rot_joint, max_grad, extent, kl_threshold)
+        self.kl_densify_and_split(grads, max_grad, extent, kl_threshold)
         self.kl_merge(grads, max_grad, extent, 0.1)
 
         prune_mask = (self.get_opacity < min_opacity).squeeze()
@@ -736,8 +745,13 @@ class GaussianModel:
         # kl_div_0 = torch.vmap(torch.trace)(cov_1_inv @ cov_0)
 
         product = cov_1_inv @ cov_0
-
-        kl_div_0 = torch.empty(product.shape[0]).to(cov_0.device)
+        try:
+            kl_div_0 = torch.empty(product.shape[0]).to('cuda')
+        except:
+            import pdb
+            pdb.set_trace()
+            print("===============product===============")
+            print(product.shape)
 
         for i in range(product.shape[0]):
             kl_div_0[i] = torch.trace(product[i])

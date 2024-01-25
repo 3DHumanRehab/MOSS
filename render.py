@@ -60,12 +60,16 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         # view.full_proj_transform = new_view.full_proj_transform
         # view.camera_center = new_view.camera_center
         # Start timer
-        start_time = time.time()
+        # start_time = time.time()
+        torch.cuda.synchronize()
+        start_time = time.perf_counter()
         render_output = render(view, gaussians, pipeline, background, transforms=transforms, translation=translation)
         rendering = render_output["render"]
 
         # end time
-        end_time = time.time()
+        # end_time = time.time()
+        torch.cuda.synchronize()
+        end_time = time.perf_counter()
         # Calculate elapsed time
         elapsed_time += end_time - start_time
 
@@ -77,6 +81,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
             gaussians.save_ply_with_mesh(os.path.join(ply_path, '{0:05d}'.format(index) + ".ply"),render_output["means3D"])
             gaussians.save_tensor(os.path.join(depth_path, '{0:05d}'.format(index) + ".png"),render_output["render_depth"])
             gaussians.save_tensor(os.path.join(alpha_path, '{0:05d}'.format(index) + ".png"),render_output["render_alpha"])
+
 
     # Calculate elapsed time
     print("Elapsed time: ", elapsed_time, " FPS: ", len(views)/elapsed_time) 
@@ -139,31 +144,37 @@ if __name__ == "__main__":
     args.data_device='cuda'
     args.debug=False
     args.eval=True
-    args.data_name = '392'
-    if False:
-        args.exp_name=f'zju_mocap_refine/my_{args.data_name}_baseline'
-        args.iteration='1200'
-    else:
-        args.exp_name=f'zju_mocap_refine/my_{args.data_name}_Fisher_CA'
-        args.iteration='3000'
-    args.images='images'
-    args.model_path=f'output/{args.exp_name}'
-    args.motion_offset_flag=True
-    args.quiet=False
-    args.resolution=-1
-    args.sh_degree=3
-    args.skip_test=False
-    args.skip_train=True
-    args.smpl_type='smpl'
-    args.source_path=f'/HOME/HOME/data/ZJU-MoCap/my_{args.data_name}'
-    args.white_background=False
+    # name_list = ['392','377','387','393','394']
+    # name_list = ['386','387','393','394']
+    name_list = ['377','386','387','392','393','394']
+    for data_name in name_list:
+        args.data_name = data_name
+        if True:
+            # args.exp_name=f'zju_mocap_refine/my_{args.data_name}_baseline'
+            args.exp_name=f'/HOME/HOME/Caixiang/GauHuman_baseline_2/output/zju_mocap_refine/my_{args.data_name}_baseline'
+            args.iteration='1200'
+        else:
+            args.exp_name=f'zju_mocap_refine/my_{args.data_name}_Fisher_CA'
+            args.iteration='3000'
+        args.images='images'
+        # args.model_path=f'output/{args.exp_name}'
+        args.model_path=f'{args.exp_name}'
+        args.motion_offset_flag=True
+        args.quiet=False
+        args.resolution=-1
+        args.sh_degree=3
+        args.skip_test=False
+        args.skip_train=True
+        args.smpl_type='smpl'
+        args.source_path=f'/HOME/HOME/data/ZJU-MoCap/my_{args.data_name}'
+        args.white_background=False
 
-    print("=====================================")
-    print("Rendering " + args.model_path)
-    print(args)
-    print("=====================================")
+        print("=====================================")
+        print("Rendering " + args.model_path)
+        print(args)
+        print("=====================================")
 
-    # Initialize system state (RNG)
-    safe_state(args.quiet)
+        # Initialize system state (RNG)
+        safe_state(args.quiet)
 
-    render_sets(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test)
+        render_sets(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test)

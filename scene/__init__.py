@@ -97,10 +97,20 @@ class Scene:
             print("===="*8)
             if os.path.exists(model_path):
                 ckpt = torch.load(model_path, map_location='cuda:0')
-                self.gaussians.auto_regression.load_state_dict(ckpt['Autoregression'])
-                self.gaussians.cross_attention_lbs.load_state_dict(ckpt['CrossAttention_lbs'])
+                try:
+                    self.gaussians.auto_regression.load_state_dict(ckpt['Autoregression'])
+                except:
+                    print("Missing Autoregression")
+                try:
+                    self.gaussians.cross_attention_lbs.load_state_dict(ckpt['CrossAttention_lbs'])
+                except:
+                    print('Missing CrossAttention_lbs')
                 self.gaussians.pose_decoder.load_state_dict(ckpt['pose_decoder'])
-                self.gaussians.weight_offset_decoder.load_state_dict(ckpt['weight_offset_decoder'])
+                try:
+                    self.gaussians.weight_offset_decoder.load_state_dict(ckpt['weight_offset_decoder'])
+                    
+                except:
+                    self.gaussians.weight_offset_decoder.load_state_dict(ckpt['lweight_offset_decoder'])
 
     def save(self, iteration):
         point_cloud_path = os.path.join(self.model_path, "point_cloud/iteration_{}".format(iteration))
