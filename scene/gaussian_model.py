@@ -539,6 +539,10 @@ class GaussianModel:
         self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacities, new_scaling, new_rotation)
 
     def kl_densify_and_clone(self, grads,rot_joint, grad_threshold, scene_extent, kl_threshold=0.4):
+        if self._xyz.shape[0]>45695:
+            print("==================================")
+            print("self._xyz.shape:",self._xyz.shape)
+            return
         # Extract points that satisfy the gradient condition
         selected_pts_mask = torch.where(torch.norm(grads, dim=-1) >= grad_threshold, True, False)
         selected_pts_mask = torch.logical_and(selected_pts_mask,
@@ -581,6 +585,10 @@ class GaussianModel:
         self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacity, new_scaling, new_rotation)
 
     def kl_densify_and_split(self, grads, grad_threshold, scene_extent, kl_threshold=0.4, N=2):
+        if self._xyz.shape[0]>45695:
+            print("==================================")
+            print("self._xyz.shape:",self._xyz.shape)
+            return
         n_init_points = self.get_xyz.shape[0]
         # Extract points that satisfy the gradient condition
         padded_grad = torch.zeros((n_init_points), device="cuda")
@@ -628,6 +636,10 @@ class GaussianModel:
         self.prune_points(prune_filter)
 
     def kl_merge(self, grads,grad_threshold, scene_extent, kl_threshold=0.1):
+        if self._xyz.shape[0]>45695:
+            print("==================================")
+            print("self._xyz.shape:",self._xyz.shape)
+            return
         n_init_points = self.get_xyz.shape[0]
         # Extract points that satisfy the gradient condition
         padded_grad = torch.zeros((n_init_points), device="cuda")
@@ -692,7 +704,7 @@ class GaussianModel:
         # rot_joint = rot_joint.reshape(23,9)   # TODO:使用target rot  debug 查看根节点的旋转矩阵
         # rot_joint = (lbs_weights[0,:,1:]@rot_joint).reshape(-1,3,3)
         
-        rot_joint = torch.cat([torch.zeros(1,3,3).cuda(),rot_joint],dim=0).reshape(24,9)   # TODO:使用target rot  debug 查看根节点的旋转矩阵
+        rot_joint = torch.cat([torch.ones(1,3,3).cuda(),rot_joint],dim=0).reshape(24,9)   # TODO:使用target rot  debug 查看根节点的旋转矩阵
         rot_joint = (lbs_weights[0]@rot_joint).reshape(-1,3,3)
 
         grads[grads.isnan()] = 0.0

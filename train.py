@@ -10,6 +10,8 @@
 #
 
 import os
+os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
+os.environ['TORCH_CUDNN_V8_API_DISABLED'] = '1'
 import cv2
 import time
 import lpips
@@ -132,9 +134,9 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         nll_loss = matrix_fisher_nll(pred_F,pred_U,pred_S,pred_V,target_R)
         nll_loss = nll_loss.mean()   # tensor(4.1514e-07)
 
-        # loss = Ll1 + 0.5 * mask_loss + 0.01 * (1.0 - ssim_loss) + 0.01 * lpips_loss + 0.01 * nll_loss +0.01 * s3im_loss
+        loss = Ll1 + 0.5 * mask_loss + 0.01 * (1.0 - ssim_loss) + 0.01 * lpips_loss + 0.01 * nll_loss +0.01 * s3im_loss
         # loss = Ll1 + 0.01 * nll_loss + 0.01 * s3im_loss
-        loss = Ll1 + 0.1 * nll_loss + 0.1 * s3im_loss
+        # loss = Ll1 + 0.1 * nll_loss + 0.1 * s3im_loss
         # loss = Ll1 + 0.5 * mask_loss + (0.01 * (1.0 - ssim_loss) + 0.01 * lpips_loss + 0.01 * nll_loss +0.01 * s3im_loss)*10
         loss.backward()
     
@@ -180,7 +182,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 gaussians.add_densification_stats(viewspace_point_tensor, visibility_filter)
 
                 if iteration > opt.densify_from_iter and iteration % opt.densification_interval == 0:
-                # if iteration > 1 :
                     size_threshold = 20 if iteration > opt.opacity_reset_interval else None
                     # gaussians.densify_and_prune(opt.densify_grad_threshold, 0.005, scene.cameras_extent, size_threshold, kl_threshold=0.4, t_vertices=viewpoint_cam.big_pose_world_vertex, iter=iteration)
                     gaussians.densify_and_prune(opt.densify_grad_threshold,joint_F,lbs_weights,0.005, scene.cameras_extent, size_threshold, kl_threshold=0.4, t_vertices=viewpoint_cam.big_pose_world_vertex, iter=iteration)
@@ -276,8 +277,6 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
                 print(psnr_test.item(), ssim_test.item(), lpips_test.item()*1000)
                 
                 if config['name']=="test":
-                    file.write("==========="*8)
-                    file.write("\n[ITER {}] Evaluating {} #{}: L1 {} PSNR  SSIM  LPIPS".format(iteration, config['name'], len(config['cameras']), l1_test))
                     context = f'{psnr_test.item()} {ssim_test.item()} {lpips_test.item()*1000}'
                     file.write(context)
                     print('\n')
@@ -317,21 +316,19 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
     
+    # name_list = ['377']
     # name_list = ['386']
     name_list = ['377','386','387','392','393','394']
     
     # file_name = 'lr5_01nll_loss01_s3im_loss.txt'
-    file_name = 'temp.txt'
+    file_name = 'densify_2000_rot1_lbs_init.txt'
     save_path = f'/HOME/HOME/Caixiang/GauHuman/result/{file_name}'
     file = open(save_path, 'a')
     for name in name_list:
         print("Train on",name)
-        file.write(name)
+        file.write('\n'+"my_"+name+'\n')
         sys_list = ['-s', f'/HOME/HOME/data/ZJU-MoCap/my_{name}', '--eval', '--exp_name', f'zju_mocap_refine/my_{name}_{file_name[:-4]}', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '3600']
         args = parser.parse_args(sys_list)
-        # print("====="*88)
-        # print('sys.argv[1:]',sys.argv[1:])
-        # print("====="*88)
 
         args.save_iterations.append(args.iterations)
 
@@ -348,4 +345,3 @@ if __name__ == "__main__":
     file.close()
     print("\nTraining complete.")
   
-

@@ -141,7 +141,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             "translation": translation,
             "correct_Rs": correct_Rs,
             "pose_out":pose_out,
-            "lbs_weights":lbs_weights,
-            # "lbs_weights":bweights,
+            # "lbs_weights":lbs_weights,
+            "lbs_weights":bweights,
             "means3D":means3D}
 
