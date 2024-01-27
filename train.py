@@ -277,9 +277,9 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
                 print(psnr_test.item(), ssim_test.item(), lpips_test.item()*1000)
                 
                 if config['name']=="test":
-                    context = f'{psnr_test.item()} {ssim_test.item()} {lpips_test.item()*1000}'
+                    context = f'{iteration} {psnr_test.item()} {ssim_test.item()} {lpips_test.item()*1000}'
                     file.write(context)
-                    print('\n')
+                    file.write('\n')
                     
                 if tb_writer:
                     tb_writer.add_scalar(config['name'] + '/loss_viewpoint - l1_loss', l1_test, iteration)
