@@ -10,8 +10,6 @@
 #
 
 import os
-os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
-os.environ['TORCH_CUDNN_V8_API_DISABLED'] = '1'
 import cv2
 import time
 import lpips
@@ -135,6 +133,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         nll_loss = nll_loss.mean()   # tensor(4.1514e-07)
 
         loss = Ll1 + 0.5 * mask_loss + 0.01 * (1.0 - ssim_loss) + 0.01 * lpips_loss + 0.01 * nll_loss +0.01 * s3im_loss
+        # loss = Ll1 + 0.5 * mask_loss + 0.01 * (1.0 - ssim_loss) + 0.01 * lpips_loss
         # loss = Ll1 + 0.01 * nll_loss + 0.01 * s3im_loss
         # loss = Ll1 + 0.1 * nll_loss + 0.1 * s3im_loss
         # loss = Ll1 + 0.5 * mask_loss + (0.01 * (1.0 - ssim_loss) + 0.01 * lpips_loss + 0.01 * nll_loss +0.01 * s3im_loss)*10
@@ -321,7 +320,7 @@ if __name__ == "__main__":
     name_list = ['377','386','387','392','393','394']
     
     # file_name = 'lr5_01nll_loss01_s3im_loss.txt'
-    file_name = 'densify_2000_rot1_lbs_init.txt'
+    file_name = 'temp.txt'
     save_path = f'/HOME/HOME/Caixiang/GauHuman/result/{file_name}'
     file = open(save_path, 'a')
     for name in name_list:
@@ -344,4 +343,3 @@ if __name__ == "__main__":
     # All done
     file.close()
     print("\nTraining complete.")
-  

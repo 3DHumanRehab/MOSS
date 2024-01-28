@@ -562,7 +562,8 @@ class GaussianModel:
         rotation_1_q = rotation_q[:, 1:].reshape(-1, 4)
         scaling_diag_1 = scaling_diag[:, 1:].reshape(-1, 3)
 
-        kl_div = self.kl_div(xyz_0, rotation_0_q, scaling_diag_0, xyz_1, rotation_1_q, scaling_diag_1)
+        kl_div = self.kl_div(xyz_0, rotation_0_q, scaling_diag_0, xyz_1, rotation_1_q, scaling_diag_1,rot_joint[point_ids[0]].detach())
+        # kl_div = self.kl_div(xyz_0, rotation_0_q, scaling_diag_0, xyz_1, rotation_1_q, scaling_diag_1)
         self.kl_selected_pts_mask = kl_div > kl_threshold
 
         selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask
@@ -735,18 +736,26 @@ class GaussianModel:
 
         torch.cuda.empty_cache()
 
-    def kl_div(self, mu_0, rotation_0_q, scaling_0_diag, mu_1, rotation_1_q, scaling_1_diag):
+
+
+    def kl_div(self, mu_0, rotation_0_q, scaling_0_diag, mu_1, rotation_1_q, scaling_1_diag, rot_joint=None):
 
         # claculate cov_0
         rotation_0 = build_rotation(rotation_0_q)
         scaling_0 = build_scaling(scaling_0_diag)
-        L_0 = rotation_0 @ scaling_0
+        if rot_joint!=None:
+            L_0 = rotation_0 @ scaling_0 @ rot_joint[:, 0]
+        else:
+            L_0 = rotation_0 @ scaling_0
         cov_0 = L_0 @ L_0.transpose(1, 2)
 
         # claculate inverse of cov_1
         rotation_1 = build_rotation(rotation_1_q)
         scaling_1_inv = build_scaling(1/scaling_1_diag)
-        L_1_inv = rotation_1 @ scaling_1_inv
+        if rot_joint!=None:
+            L_1_inv = rotation_1 @ scaling_1_inv @ rot_joint[:, 1]
+        else:
+            L_1_inv = rotation_1 @ scaling_1_inv
         cov_1_inv = L_1_inv @ L_1_inv.transpose(1, 2)
 
         # difference of mu_1 and mu_0
@@ -1022,6 +1031,5 @@ def batch_rodrigues(rot_vecs, epsilon=1e-8, dtype=torch.float32):
     ident = torch.eye(3, dtype=dtype, device=device).unsqueeze(dim=0)
     rot_mat = ident + sin * K + (1 - cos) * torch.bmm(K, K)
     return rot_mat
-
 
 

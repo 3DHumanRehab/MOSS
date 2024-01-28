@@ -52,6 +52,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         debug=pipe.debug
     )
 
+
     rasterizer = GaussianRasterizer(raster_settings=raster_settings)
     means3D = pc.get_xyz
     pose_out = None
@@ -84,6 +85,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         else:
             correct_Rs = None
             lbs_weights = None
+            bweights = None
             means3D = torch.matmul(transforms, means3D[..., None]).squeeze(-1) + translation
 
     means3D = means3D.squeeze()  # torch.Size([6890, 3])

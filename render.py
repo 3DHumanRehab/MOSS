@@ -147,15 +147,18 @@ if __name__ == "__main__":
     # name_list = ['392','377','387','393','394']
     # name_list = ['386','387','393','394']
     name_list = ['377','386','387','392','393','394']
-    for data_name in name_list:
+    log_name = 'w_o_all'
+    iteration_list = [3200,3200,2700,3000,2500,2500]
+    
+    for iteration,data_name in zip(iteration_list,name_list):
         args.data_name = data_name
-        if True:
+        if False:
             # args.exp_name=f'zju_mocap_refine/my_{args.data_name}_baseline'
             args.exp_name=f'/HOME/HOME/Caixiang/GauHuman_baseline_2/output/zju_mocap_refine/my_{args.data_name}_baseline'
             args.iteration='1200'
         else:
-            args.exp_name=f'zju_mocap_refine/my_{args.data_name}_Fisher_CA'
-            args.iteration='3000'
+            args.exp_name=f'/HOME/HOME/Caixiang/GauHuman/output/zju_mocap_refine/my_{args.data_name}_{log_name}'
+            args.iteration=iteration
         args.images='images'
         # args.model_path=f'output/{args.exp_name}'
         args.model_path=f'{args.exp_name}'
@@ -178,3 +181,5 @@ if __name__ == "__main__":
         safe_state(args.quiet)
 
         render_sets(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test)
+
+
