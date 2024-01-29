@@ -83,9 +83,9 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             # torch.Size([1, 6890, 3])
             _, means3D, bweights, transforms, translation = pc.coarse_deform_c2source(means3D[None], viewpoint_camera.smpl_param,viewpoint_camera.big_pose_smpl_param,viewpoint_camera.big_pose_world_vertex[None], lbs_weights=lbs_weights, correct_Rs=correct_Rs, return_transl=return_smpl_rot)
         else:
+            bweights = None
             correct_Rs = None
             lbs_weights = None
-            bweights = None
             means3D = torch.matmul(transforms, means3D[..., None]).squeeze(-1) + translation
 
     means3D = means3D.squeeze()  # torch.Size([6890, 3])
@@ -116,7 +116,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             sh2rgb = eval_sh(pc.active_sh_degree, shs_view, dir_pp_normalized)
             colors_precomp = torch.clamp_min(sh2rgb + 0.5, 0.0)
         else:
-            shs = pc.get_features     # torch.Size([32004, 16, 3])
+            shs = pc.get_features     # torch.Size([6890, 16, 3])
     else:
         colors_precomp = override_color
 

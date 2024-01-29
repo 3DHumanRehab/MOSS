@@ -320,8 +320,8 @@ if __name__ == "__main__":
     name_list = ['377','386','387','392','393','394']
     
     # file_name = 'lr5_01nll_loss01_s3im_loss.txt'
-    file_name = 'temp.txt'
-    save_path = f'/HOME/HOME/Caixiang/GauHuman/result/{file_name}'
+    file_name = 'knn5_threshold0055.txt'
+    save_path = f'result/{file_name}'
     file = open(save_path, 'a')
     for name in name_list:
         print("Train on",name)

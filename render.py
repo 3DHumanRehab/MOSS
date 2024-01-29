@@ -144,10 +144,9 @@ if __name__ == "__main__":
     args.data_device='cuda'
     args.debug=False
     args.eval=True
-    # name_list = ['392','377','387','393','394']
-    # name_list = ['386','387','393','394']
+
     name_list = ['377','386','387','392','393','394']
-    log_name = 'w_o_all'
+    log_name = 'kl_rot'
     iteration_list = [3200,3200,2700,3000,2500,2500]
     
     for iteration,data_name in zip(iteration_list,name_list):

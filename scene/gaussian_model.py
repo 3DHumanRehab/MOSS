@@ -85,6 +85,7 @@ class GaussianModel:
         # load knn module
         self.knn = KNN(k=1, transpose_mode=True)
         self.knn_near_2 = KNN(k=2, transpose_mode=True)
+        self.knn_near_5 = KNN(k=5, transpose_mode=True)
 
         self.motion_offset_flag = motion_offset_flag
         if self.motion_offset_flag:
@@ -265,28 +266,6 @@ class GaussianModel:
 
         extrinsics = lookat(eye, at, np.array([0, 0, -1])).astype(np.float32)
         return extrinsics
-
-    @torch.no_grad()
-    def save_model(self, mode='geo',render=None,viewpoint_camera=None,cur_out=None,background=None, pipe=None, texture_size=1024):
-        
-        self.outdir = '/root/workspace/Caixiang/GauHuman-main/result'
-        self.save_path = 'me'
-        self.density_thresh = 1
-        self.mesh_format = 'obj'
-        self.radius = 2
-        self.near=0.001
-        self.far=1000
-        self.scale = 1
-        self.perspective = np.array([[ 2.189235,  0.      ,  0.      ,  0.      ],
-                                [ 0.      , -2.189235,  0.      ,  0.      ],
-                                [ 0.      ,  0.      , -1.0002  , -0.020002],
-                                [ 0.      ,  0.      , -1.      ,  0.      ]])
-        os.makedirs(self.outdir, exist_ok=True)
-
-        path = os.path.join(self.outdir, self.save_path + '_model.ply')
-        self.save_ply(path)
-
-        print(f"[INFO] save model to {path}.")
 
     def update_learning_rate(self, iteration):
         ''' Learning rate scheduling per step '''
@@ -565,10 +544,19 @@ class GaussianModel:
         kl_div = self.kl_div(xyz_0, rotation_0_q, scaling_diag_0, xyz_1, rotation_1_q, scaling_diag_1,rot_joint[point_ids[0]].detach())
         # kl_div = self.kl_div(xyz_0, rotation_0_q, scaling_diag_0, xyz_1, rotation_1_q, scaling_diag_1)
         self.kl_selected_pts_mask = kl_div > kl_threshold
+        
+        selected_idx_mask = torch.where(torch.norm(grads, dim=-1) >= 0.0003, True, False)
+        selected_idx_mask = torch.logical_and(selected_idx_mask,
+                                              torch.max(self.get_scaling, dim=1).values <= self.percent_dense*scene_extent)
+        _, point_ids = self.knn_near_5(self._xyz[None].detach(),self._xyz[selected_idx_mask][None].detach())
+        point_ids = torch.unique(point_ids)
+        knn_selected_pts_mask = torch.zeros(self.kl_selected_pts_mask.shape, dtype=torch.bool,device='cuda')
 
-        selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask
+        knn_selected_pts_mask[point_ids] = True
 
-        print("[kl clone]: ", (selected_pts_mask & self.kl_selected_pts_mask).sum().item())
+        selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & knn_selected_pts_mask
+
+        print("[kl clone]: ", selected_pts_mask & self.kl_selected_pts_mask.sum().item())
 
         stds = self.get_scaling[selected_pts_mask]
         means =torch.zeros((stds.size(0), 3),device="cuda")
@@ -586,12 +574,13 @@ class GaussianModel:
         self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacity, new_scaling, new_rotation)
 
     def kl_densify_and_split(self, grads, grad_threshold, scene_extent, kl_threshold=0.4, N=2):
+        #  grad_threshold 0.0002
         if self._xyz.shape[0]>45695:
             print("==================================")
             print("self._xyz.shape:",self._xyz.shape)
             return
         n_init_points = self.get_xyz.shape[0]
-        # Extract points that satisfy the gradient condition
+        # Extract points that satisfy the gradient condi tion
         padded_grad = torch.zeros((n_init_points), device="cuda")
         padded_grad[:grads.shape[0]] = grads.squeeze()
         selected_pts_mask = torch.where(padded_grad >= grad_threshold, True, False)
@@ -599,7 +588,7 @@ class GaussianModel:
                                               torch.max(self.get_scaling, dim=1).values > self.percent_dense*scene_extent)
 
         # for each gaussian point, find its nearest 2 points and return the distance
-        _, point_ids = self.knn_near_2(self._xyz[None].detach(), self._xyz[None].detach())     
+        _, point_ids = self.knn_near_2(self._xyz[None].detach(), self._xyz[None].detach())
         xyz = self._xyz[point_ids[0]].detach()
         rotation_q = self._rotation[point_ids[0]].detach()
         scaling_diag = self.get_scaling[point_ids[0]].detach()
@@ -613,8 +602,8 @@ class GaussianModel:
         scaling_diag_1 = scaling_diag[:, 1:].reshape(-1, 3)
 
         kl_div = self.kl_div(xyz_0, rotation_0_q, scaling_diag_0, xyz_1, rotation_1_q, scaling_diag_1)
-        self.kl_selected_pts_mask = kl_div > kl_threshold
-
+        self.kl_selected_pts_mask = kl_div > kl_threshold    
+        
         selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask
 
         print("[kl split]: ", (selected_pts_mask & self.kl_selected_pts_mask).sum().item())
@@ -716,27 +705,70 @@ class GaussianModel:
         self.kl_densify_and_split(grads, max_grad, extent, kl_threshold)
         self.kl_merge(grads, max_grad, extent, 0.1)
 
+        # TODO: min_opacity
         prune_mask = (self.get_opacity < min_opacity).squeeze()
         if max_screen_size:
             big_points_vs = self.max_radii2D > max_screen_size
             big_points_ws = self.get_scaling.max(dim=1).values > 0.1 * extent
             prune_mask = torch.logical_or(torch.logical_or(prune_mask, big_points_vs), big_points_ws)
 
+        # TODO: 剔除离群点
         # use smpl prior to prune points 
         distance, _ = self.knn(t_vertices[None], self._xyz[None].detach())
         distance = distance.view(distance.shape[0], -1)
-        threshold = 0.05
+        # threshold = 0.05
+        threshold = 0.055
         pts_mask = (distance > threshold).squeeze()
-
-        prune_mask = prune_mask | pts_mask
-
-        print('total points num: ', self._xyz.shape[0], 'prune num: ', prune_mask.sum().item())
+        # from sklearn.ensemble import IsolationForest
+        # clf = IsolationForest(random_state=0).fit(self._xyz.detach().cpu().reshape(-1, 3))
+        # outliers = self._xyz[clf.predict(self._xyz.detach().cpu().reshape(-1, 3)) == -1]
+        # print("Outliers:", outliers)
         
+        prune_mask = prune_mask | pts_mask
+        print('total points num: ', self._xyz.shape[0], 'prune num: ', prune_mask.sum().item())        
         self.prune_points(prune_mask)
 
         torch.cuda.empty_cache()
 
 
+        # import matplotlib.pyplot as plt
+        # from mpl_toolkits.mplot3d import Axes3D
+        # import numpy as np
+        # points =  t_vertices.detach().cpu().numpy()
+
+        # # 创建一个3D坐标系
+        # fig = plt.figure()
+        # ax = fig.add_subplot(111, projection='3d')
+
+        # # 画点
+        # ax.scatter(points[:, 0], points[:, 1], points[:, 2])
+
+        # # 在每个点周围画圈
+        # for point in points:
+        #     # 创建一个球面
+        #     u, v = np.mgrid[0:2*np.pi:20j, 0:np.pi:10j]
+        #     x = np.cos(u) * np.sin(v)
+        #     y = np.sin(u) * np.sin(v)
+        #     z = np.cos(v)
+            
+        #     # 缩放和平移球面来创建圆圈
+        #     radius = 0.05
+        #     x = radius * x + point[0]
+        #     y = radius * y + point[1]
+        #     z = radius * z + point[2]
+            
+        #     # 画圆圈
+        #     ax.plot_wireframe(x, y, z, color="r")
+
+        # # 设置坐标轴标签
+        # ax.set_xlabel('X Axis')
+        # ax.set_ylabel('Y Axis')
+        # ax.set_zlabel('Z Axis')
+
+        # plt.savefig("3d_plot.png", dpi=300)  # 保存为PNG文件，分辨率300dpi
+
+        # # 关闭图形，释放资源
+        # plt.close(fig)
 
     def kl_div(self, mu_0, rotation_0_q, scaling_0_diag, mu_1, rotation_1_q, scaling_1_diag, rot_joint=None):
 
