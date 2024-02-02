@@ -11,7 +11,6 @@
 import copy
 import cv2
 import torch
-import torchvision
 from collections import defaultdict
 import numpy as np
 from utils.general_utils import inverse_sigmoid, get_expon_lr_func, build_rotation, build_scaling
@@ -62,6 +61,8 @@ class GaussianModel:
         self._features_rest = torch.empty(0)
         self._scaling = torch.empty(0)
         self._rotation = torch.empty(0)
+        self.origin_scaling = self._scaling
+        self.origin_rotation = self._rotation
         self._opacity = torch.empty(0)
         self.max_radii2D = torch.empty(0)
         self.xyz_gradient_accum = torch.empty(0)
@@ -151,6 +152,15 @@ class GaussianModel:
     def get_rotation(self):
         return self.rotation_activation(self._rotation)
     
+    
+    @property
+    def get_origin_scaling(self):
+        return self.scaling_activation(self.origin_scaling)
+    
+    @property
+    def get_origin_rotation(self):
+        return self.rotation_activation(self.origin_rotation)
+    
     @property
     def get_xyz(self):
         return self._xyz
@@ -212,7 +222,7 @@ class GaussianModel:
                 {'params': [self._rotation], 'lr': training_args.rotation_lr, "name": "rotation"}
             ]
         else:
-            # Highlight_lr
+            # Highlight_lr  # TODO:
             l = [
                 {'params': [self._xyz], 'lr': training_args.position_lr_init * self.spatial_lr_scale, "name": "xyz"},
                 {'params': [self._features_dc], 'lr': training_args.feature_lr, "name": "f_dc"},
@@ -528,22 +538,17 @@ class GaussianModel:
                                               torch.max(self.get_scaling, dim=1).values <= self.percent_dense*scene_extent)
 
         # for each gaussian point, find its nearest 2 points and return the distance
-        _, point_ids = self.knn_near_2(self._xyz[None].detach(), self._xyz[None].detach())     
-        xyz = self._xyz[point_ids[0]].detach()
-        rotation_q = self._rotation[point_ids[0]].detach()   # torch.Size([6890, 4])
-        scaling_diag = self.get_scaling[point_ids[0]].detach()
+        self.kl_selected_pts_mask = self.cal_kl(kl_threshold,rot_joint)
+        
+        rotation_0_q = self._rotation.detach()
+        scaling_diag_0 = self.get_scaling.detach()
 
-        xyz_0 = xyz[:, 0].reshape(-1, 3)
-        rotation_0_q = rotation_q[:, 0].reshape(-1, 4)
-        scaling_diag_0 = scaling_diag[:, 0].reshape(-1, 3)
+        rotation_1_q = self.origin_rotation.detach()
+        scaling_diag_1 = self.get_origin_scaling.detach()
 
-        xyz_1 = xyz[:, 1:].reshape(-1, 3)
-        rotation_1_q = rotation_q[:, 1:].reshape(-1, 4)
-        scaling_diag_1 = scaling_diag[:, 1:].reshape(-1, 3)
+        kl_div = self.kl_div(self._xyz, rotation_0_q, scaling_diag_0, self._xyz, rotation_1_q, scaling_diag_1,torch.stack([rot_joint,rot_joint],dim=1).detach())
 
-        kl_div = self.kl_div(xyz_0, rotation_0_q, scaling_diag_0, xyz_1, rotation_1_q, scaling_diag_1,rot_joint[point_ids[0]].detach())
-        # kl_div = self.kl_div(xyz_0, rotation_0_q, scaling_diag_0, xyz_1, rotation_1_q, scaling_diag_1)
-        self.kl_selected_pts_mask = kl_div > kl_threshold
+        kl_selected_pts_mask_2 =  kl_div > 0.4
         
         selected_idx_mask = torch.where(torch.norm(grads, dim=-1) >= 0.0003, True, False)
         selected_idx_mask = torch.logical_and(selected_idx_mask,
@@ -554,16 +559,20 @@ class GaussianModel:
 
         knn_selected_pts_mask[point_ids] = True
 
+        # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & knn_selected_pts_mask | kl_selected_pts_mask_2
+        # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & knn_selected_pts_mask & kl_selected_pts_mask_2
+        # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask 
         selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & knn_selected_pts_mask
 
-        print("[kl clone]: ", selected_pts_mask & self.kl_selected_pts_mask.sum().item())
+        print("[kl clone]: ", (selected_pts_mask & self.kl_selected_pts_mask).sum().item())
 
         stds = self.get_scaling[selected_pts_mask]
         means =torch.zeros((stds.size(0), 3),device="cuda")
         samples = torch.normal(mean=means, std=stds)
         rots = build_rotation(self._rotation[selected_pts_mask])  # (*,3,3)
 
-        rots = rots @ rot_joint[selected_pts_mask].reshape(-1,3,3)
+        # rots = rots @ rot_joint[selected_pts_mask].reshape(-1,3,3)
+        rots = rot_joint[selected_pts_mask].reshape(-1,3,3) @ rots
         new_xyz = torch.bmm(rots, samples.unsqueeze(-1)).squeeze(-1) + self.get_xyz[selected_pts_mask]
         new_scaling = self.scaling_inverse_activation(self.get_scaling[selected_pts_mask])
         new_rotation = self._rotation[selected_pts_mask]
@@ -588,21 +597,7 @@ class GaussianModel:
                                               torch.max(self.get_scaling, dim=1).values > self.percent_dense*scene_extent)
 
         # for each gaussian point, find its nearest 2 points and return the distance
-        _, point_ids = self.knn_near_2(self._xyz[None].detach(), self._xyz[None].detach())
-        xyz = self._xyz[point_ids[0]].detach()
-        rotation_q = self._rotation[point_ids[0]].detach()
-        scaling_diag = self.get_scaling[point_ids[0]].detach()
-
-        xyz_0 = xyz[:, 0].reshape(-1, 3)
-        rotation_0_q = rotation_q[:, 0].reshape(-1, 4)
-        scaling_diag_0 = scaling_diag[:, 0].reshape(-1, 3)
-
-        xyz_1 = xyz[:, 1:].reshape(-1, 3)
-        rotation_1_q = rotation_q[:, 1:].reshape(-1, 4)
-        scaling_diag_1 = scaling_diag[:, 1:].reshape(-1, 3)
-
-        kl_div = self.kl_div(xyz_0, rotation_0_q, scaling_diag_0, xyz_1, rotation_1_q, scaling_diag_1)
-        self.kl_selected_pts_mask = kl_div > kl_threshold    
+        self.kl_selected_pts_mask = self.cal_kl(kl_threshold) 
         
         selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask
 
@@ -716,8 +711,7 @@ class GaussianModel:
         # use smpl prior to prune points 
         distance, _ = self.knn(t_vertices[None], self._xyz[None].detach())
         distance = distance.view(distance.shape[0], -1)
-        # threshold = 0.05
-        threshold = 0.055
+        threshold = 0.05
         pts_mask = (distance > threshold).squeeze()
         # from sklearn.ensemble import IsolationForest
         # clf = IsolationForest(random_state=0).fit(self._xyz.detach().cpu().reshape(-1, 3))
@@ -770,13 +764,35 @@ class GaussianModel:
         # # 关闭图形，释放资源
         # plt.close(fig)
 
+    def cal_kl(self, kl_threshold,rot_joint=None):
+        _, point_ids = self.knn_near_2(self._xyz[None].detach(), self._xyz[None].detach())     
+        xyz = self._xyz[point_ids[0]].detach()
+        rotation_q = self._rotation[point_ids[0]].detach()   # torch.Size([6890, 4])
+        scaling_diag = self.get_scaling[point_ids[0]].detach()
+
+        xyz_0 = xyz[:, 0].reshape(-1, 3)
+        rotation_0_q = rotation_q[:, 0].reshape(-1, 4)
+        scaling_diag_0 = scaling_diag[:, 0].reshape(-1, 3)
+
+        xyz_1 = xyz[:, 1:].reshape(-1, 3)
+        rotation_1_q = rotation_q[:, 1:].reshape(-1, 4)
+        scaling_diag_1 = scaling_diag[:, 1:].reshape(-1, 3)
+
+        if rot_joint!=None:
+            kl_div = self.kl_div(xyz_0, rotation_0_q, scaling_diag_0, xyz_1, rotation_1_q, scaling_diag_1,rot_joint[point_ids[0]].detach())
+        else:
+            kl_div = self.kl_div(xyz_0, rotation_0_q, scaling_diag_0, xyz_1, rotation_1_q, scaling_diag_1)
+                    
+        return kl_div > kl_threshold
+
     def kl_div(self, mu_0, rotation_0_q, scaling_0_diag, mu_1, rotation_1_q, scaling_1_diag, rot_joint=None):
 
         # claculate cov_0
         rotation_0 = build_rotation(rotation_0_q)
         scaling_0 = build_scaling(scaling_0_diag)
         if rot_joint!=None:
-            L_0 = rotation_0 @ scaling_0 @ rot_joint[:, 0]
+            # L_0 = rotation_0 @ scaling_0 @ rot_joint[:, 0]
+            L_0 = rot_joint[:, 0] @ (rotation_0 @ scaling_0)
         else:
             L_0 = rotation_0 @ scaling_0
         cov_0 = L_0 @ L_0.transpose(1, 2)
@@ -785,7 +801,9 @@ class GaussianModel:
         rotation_1 = build_rotation(rotation_1_q)
         scaling_1_inv = build_scaling(1/scaling_1_diag)
         if rot_joint!=None:
-            L_1_inv = rotation_1 @ scaling_1_inv @ rot_joint[:, 1]
+            # L_1_inv = rotation_1 @ scaling_1_inv @ rot_joint[:, 1]
+            L_1_inv = rot_joint[:, 1] @ (rotation_1 @ scaling_1_inv)
+            
         else:
             L_1_inv = rotation_1 @ scaling_1_inv
         cov_1_inv = L_1_inv @ L_1_inv.transpose(1, 2)
@@ -854,7 +872,7 @@ class GaussianModel:
         self.mean_shape = True
         if self.mean_shape:
             posedirs = self.SMPL_NEUTRAL['posedirs'].cuda().float() # torch.Size([6890, 3, 207])   23*9
-            pose_ = big_pose_params['poses']                        # torch.Size([1, 72])
+            pose_ = big_pose_params['poses']                        # torch.Size([1, 72])          24*3
             ident = torch.eye(3).cuda().float()
             batch_size = pose_.shape[0]
             rot_mats = batch_rodrigues(pose_.view(-1, 3)).view([batch_size, -1, 3, 3])  # 24,3,3
@@ -1063,5 +1081,3 @@ def batch_rodrigues(rot_vecs, epsilon=1e-8, dtype=torch.float32):
     ident = torch.eye(3, dtype=dtype, device=device).unsqueeze(dim=0)
     rot_mat = ident + sin * K + (1 - cos) * torch.bmm(K, K)
     return rot_mat
-
-

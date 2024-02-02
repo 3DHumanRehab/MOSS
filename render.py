@@ -153,7 +153,7 @@ if __name__ == "__main__":
         args.data_name = data_name
         if False:
             # args.exp_name=f'zju_mocap_refine/my_{args.data_name}_baseline'
-            args.exp_name=f'/HOME/HOME/Caixiang/GauHuman_baseline_2/output/zju_mocap_refine/my_{args.data_name}_baseline'
+            args.exp_name=f'/HOME/HOME/Caixiang/GauHuman_baseline/output/zju_mocap_refine/my_{args.data_name}_baseline'
             args.iteration='1200'
         else:
             args.exp_name=f'/HOME/HOME/Caixiang/GauHuman/output/zju_mocap_refine/my_{args.data_name}_{log_name}'

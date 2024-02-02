@@ -24,6 +24,7 @@ class CrossAttention_lbs(nn.Module):
         self.key = nn.Linear(rot_dim, rot_dim)
         self.value = nn.Linear(rot_dim, rot_dim)
         self.out_layer = nn.Linear(feature_dim,feature_dim)
+        self.gate_proj = nn.Linear(feature_dim,feature_dim)
 
     def forward(self, query, key):
         features = xyz_embedder(query)
@@ -46,9 +47,8 @@ class CrossAttention_lbs(nn.Module):
 
         output = torch.matmul(attention,V.transpose(-2, -1))
         
-        # output = output*query
-        # output = self.out_layer(output)
-
+        # gate = torch.sigmoid(self.gate_proj(query))
+        # output = gate * self.out_layer(output)
         return output
 
 # class CrossAttention_lbs_without_bias(nn.Module):

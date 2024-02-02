@@ -37,11 +37,9 @@ We recommend using anaconda to manage the python environments.
     conda install pytorch==2.0.0 torchvision==0.15.0 torchaudio==2.0.0 pytorch-cuda=11.8 -c pytorch -c nvidia
     pip install submodules/diff-gaussian-rasterization
     pip install submodules/simple-knn
-    pip install --upgrade https://github.com/unlimblue/KNN_CUDA/releases/download/0.2/KNN_CUDA-0.2-py3-none-any.whl
+    pip install --upgrade https://github.com/unlimblue/KNN_CUDA/releases/download/0.2/KNN_CUDA-0.2-py3-none-any.whl -i https://pypi.tuna.tsinghua.edu.cn/simple
 
-
-    
-    pip install -r requirement.txt
+    pip install -r requirement.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
 Tips: We implement the [alpha mask loss version](https://github.com/ashawkey/diff-gaussian-rasterization) based on the official [diff-gaussian-rasterization](https://github.com/graphdeco-inria/diff-gaussian-rasterization/tree/59f5f77e3ddbac3ed9db93ec2cfe99ed6c5d121d).
