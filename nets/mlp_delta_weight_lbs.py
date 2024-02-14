@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from nets.GCNN import GraphResBlock
+from torch.utils.checkpoint import checkpoint
 
 class CrossAttention_lbs(nn.Module):
     def __init__(self, feature_dim=24,rot_dim = 9, num_heads=3):
@@ -25,6 +26,9 @@ class CrossAttention_lbs(nn.Module):
         self.value = nn.Linear(rot_dim, rot_dim)
         self.out_layer = nn.Linear(feature_dim,feature_dim)
         self.gate_proj = nn.Linear(feature_dim,feature_dim)
+        self.dim = 45695
+        # self.graph  = GraphResBlock(self.dim,self.dim)
+        # self.graph.set_grad_checkpointing()
 
     def forward(self, query, key):
         features = xyz_embedder(query)
@@ -35,7 +39,7 @@ class CrossAttention_lbs(nn.Module):
             if i in self.skips:
                 net = torch.cat((features, net), dim=1)
         query = self.bw_fc(net).permute(0,2,1)
-        
+ 
         key = torch.cat([torch.ones(1,1,3,3).cuda(),key],dim=1).reshape(1,24,9)
  
         value = key
@@ -46,6 +50,11 @@ class CrossAttention_lbs(nn.Module):
         attention = F.softmax(attention_scores, dim=-1)
 
         output = torch.matmul(attention,V.transpose(-2, -1))
+        # new_input =  torch.zeros((1,self.dim,self.feature_dim)).to(output.device)
+        # new_input[:,:output.shape[1]] = output
+        # out = self.graph(new_input.transpose(1,2)).transpose(1,2)
+        # out = self.graph(new_input.transpose(1,2)).transpose(1,2)
+        # output = out[:,:output.shape[1]]
         
         # gate = torch.sigmoid(self.gate_proj(query))
         # output = gate * self.out_layer(output)

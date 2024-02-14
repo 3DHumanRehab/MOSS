@@ -30,6 +30,7 @@ from nets.mlp_delta_body_pose import BodyPoseRefiner,Autoregression
 from nets.mlp_delta_weight_lbs import LBSOffsetDecoder,CrossAttention_lbs
 from grid_put import mipmap_linear_grid_put_2d
 
+from pytorch3d.transforms import matrix_to_quaternion
  
  
 class GaussianModel:
@@ -232,11 +233,11 @@ class GaussianModel:
                 {'params': [self._rotation], 'lr': training_args.rotation_lr, "name": "rotation"},
                 {'params': self.pose_decoder.parameters(), 'lr': training_args.pose_refine_lr, "name": "pose_decoder"},
                 # {'params': self.auto_regression.parameters(),'lr':training_args.pose_refine_lr*5,"name":"auto_regression"},
-                {'params': self.auto_regression.parameters(),'lr':training_args.pose_refine_lr*5,"name":"auto_regression"},
+                {'params': self.auto_regression.parameters(),'lr':training_args.auto_regression,"name":"auto_regression"},
                 # {'params': self.auto_regression.parameters(),'lr':training_args.pose_refine_lr,"name":"auto_regression"},
                 # {'params': self.auto_regression.parameters(),'lr':0.00001,"name":"auto_regression"},
                 {'params': self.weight_offset_decoder.parameters(), 'lr': training_args.lbs_offset_lr, "name": "weight_offset_decoder"},
-                {'params': self.cross_attention_lbs.parameters(), 'lr': 0.0001, "name": "cross_attention_lbs"},
+                {'params': self.cross_attention_lbs.parameters(), 'lr': training_args.cross_attention_lbs, "name": "cross_attention_lbs"},
             ] 
 
         # self.optimizer = torch.optim.Adam(l, lr=0.0, eps=1e-15)
@@ -527,7 +528,7 @@ class GaussianModel:
 
         self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacities, new_scaling, new_rotation)
 
-    def kl_densify_and_clone(self, grads,rot_joint, grad_threshold, scene_extent, kl_threshold=0.4):
+    def kl_densify_and_clone(self, grads,rot_joint,scl_joint, grad_threshold, scene_extent, kl_threshold=0.4):
         if self._xyz.shape[0]>45695:
             print("==================================")
             print("self._xyz.shape:",self._xyz.shape)
@@ -538,51 +539,58 @@ class GaussianModel:
                                               torch.max(self.get_scaling, dim=1).values <= self.percent_dense*scene_extent)
 
         # for each gaussian point, find its nearest 2 points and return the distance
-        self.kl_selected_pts_mask = self.cal_kl(kl_threshold,rot_joint)
+        self.kl_selected_pts_mask = self.cal_kl(kl_threshold)
         
-        rotation_0_q = self._rotation.detach()
-        scaling_diag_0 = self.get_scaling.detach()
+        # rotation_0_q = self._rotation.detach()
+        # scaling_diag_0 = self.get_scaling.detach()
 
-        rotation_1_q = self.origin_rotation.detach()
-        scaling_diag_1 = self.get_origin_scaling.detach()
+        # rotation_1_q = self.origin_rotation.detach()
+        # scaling_diag_1 = self.get_origin_scaling.detach()
 
-        kl_div = self.kl_div(self._xyz, rotation_0_q, scaling_diag_0, self._xyz, rotation_1_q, scaling_diag_1,torch.stack([rot_joint,rot_joint],dim=1).detach())
+        # kl_div = self.kl_div(self._xyz, rotation_0_q, scaling_diag_0, self._xyz, rotation_1_q, scaling_diag_1,torch.stack([rot_joint,rot_joint],dim=1).detach())
 
-        kl_selected_pts_mask_2 =  kl_div > 0.4
+        # kl_selected_pts_mask_2 =  kl_div > 0.4
         
-        selected_idx_mask = torch.where(torch.norm(grads, dim=-1) >= 0.0003, True, False)
-        selected_idx_mask = torch.logical_and(selected_idx_mask,
-                                              torch.max(self.get_scaling, dim=1).values <= self.percent_dense*scene_extent)
-        _, point_ids = self.knn_near_5(self._xyz[None].detach(),self._xyz[selected_idx_mask][None].detach())
-        point_ids = torch.unique(point_ids)
-        knn_selected_pts_mask = torch.zeros(self.kl_selected_pts_mask.shape, dtype=torch.bool,device='cuda')
+        # selected_idx_mask = torch.where(torch.norm(grads, dim=-1) >= 0.0003, True, False)
+        # selected_idx_mask = torch.logical_and(selected_idx_mask,
+        #                                       torch.max(self.get_scaling, dim=1).values <= self.percent_dense*scene_extent)
+        # _, point_ids = self.knn_near_5(self._xyz[None].detach(),self._xyz[selected_idx_mask][None].detach())
+        # point_ids = torch.unique(point_ids)
+        # knn_selected_pts_mask = torch.zeros(self.kl_selected_pts_mask.shape, dtype=torch.bool,device='cuda')
 
-        knn_selected_pts_mask[point_ids] = True
+        # knn_selected_pts_mask[point_ids] = True
 
         # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & knn_selected_pts_mask | kl_selected_pts_mask_2
         # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & knn_selected_pts_mask & kl_selected_pts_mask_2
         # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask 
-        selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & knn_selected_pts_mask
+        # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & knn_selected_pts_mask
+        # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & knn_selected_pts_mask & kl_selected_pts_mask_2
+        
+        selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask
 
-        print("[kl clone]: ", (selected_pts_mask & self.kl_selected_pts_mask).sum().item())
+        print("[kl clone]: ", (selected_pts_mask).sum().item())
 
-        stds = self.get_scaling[selected_pts_mask]
-        means =torch.zeros((stds.size(0), 3),device="cuda")
+        # stds = self.get_scaling[selected_pts_mask]
+        stds = scl_joint[selected_pts_mask]*self.get_scaling[selected_pts_mask]
+        
+        means = torch.zeros((stds.size(0), 3),device="cuda")
         samples = torch.normal(mean=means, std=stds)
         rots = build_rotation(self._rotation[selected_pts_mask])  # (*,3,3)
 
         # rots = rots @ rot_joint[selected_pts_mask].reshape(-1,3,3)
         rots = rot_joint[selected_pts_mask].reshape(-1,3,3) @ rots
         new_xyz = torch.bmm(rots, samples.unsqueeze(-1)).squeeze(-1) + self.get_xyz[selected_pts_mask]
-        new_scaling = self.scaling_inverse_activation(self.get_scaling[selected_pts_mask])
-        new_rotation = self._rotation[selected_pts_mask]
+        
+        # new_scaling = self.scaling_inverse_activation(self.get_scaling[selected_pts_mask])
+        new_scaling = self.scaling_inverse_activation(self.get_scaling[selected_pts_mask]*scl_joint[selected_pts_mask]) 
+        new_rotation = matrix_to_quaternion(rot_joint[selected_pts_mask].reshape(-1,3,3)) * self._rotation[selected_pts_mask] 
         new_features_dc = self._features_dc[selected_pts_mask]
         new_features_rest = self._features_rest[selected_pts_mask]
         new_opacity = self._opacity[selected_pts_mask]
-
+ 
         self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacity, new_scaling, new_rotation)
 
-    def kl_densify_and_split(self, grads, grad_threshold, scene_extent, kl_threshold=0.4, N=2):
+    def kl_densify_and_split(self, grads,origin_rot_joint,origin_scl_joint, grad_threshold, scene_extent, kl_threshold=0.4, N=2):
         #  grad_threshold 0.0002
         if self._xyz.shape[0]>45695:
             print("==================================")
@@ -590,6 +598,12 @@ class GaussianModel:
             return
         n_init_points = self.get_xyz.shape[0]
         # Extract points that satisfy the gradient condi tion
+        rot_joint = torch.zeros((n_init_points,3,3), device="cuda")
+        rot_joint[:grads.shape[0]] = origin_rot_joint
+        
+        scl_joint = torch.zeros((n_init_points,3), device="cuda")
+        scl_joint[:grads.shape[0]] = origin_scl_joint
+        
         padded_grad = torch.zeros((n_init_points), device="cuda")
         padded_grad[:grads.shape[0]] = grads.squeeze()
         selected_pts_mask = torch.where(padded_grad >= grad_threshold, True, False)
@@ -603,14 +617,21 @@ class GaussianModel:
 
         print("[kl split]: ", (selected_pts_mask & self.kl_selected_pts_mask).sum().item())
 
-        stds = self.get_scaling[selected_pts_mask].repeat(N,1)
+        # stds = self.get_scaling[selected_pts_mask].repeat(N,1)
+        stds = (scl_joint[selected_pts_mask]*self.get_scaling[selected_pts_mask]).repeat(N,1)
+        
         means =torch.zeros((stds.size(0), 3),device="cuda")
         samples = torch.normal(mean=means, std=stds)
-        rots = build_rotation(self._rotation[selected_pts_mask]).repeat(N,1,1)
-        # rots = rots @ rot_joint[selected_pts_mask].reshape(-1,3,3)            # [*,3,3]
+        
+        # rots = build_rotation(self._rotation[selected_pts_mask]).repeat(N,1,1)
+        rots = build_rotation(self._rotation[selected_pts_mask])
+        rots = (rot_joint[selected_pts_mask].reshape(-1,3,3) @ rots).repeat(N,1,1)
+        
         new_xyz = torch.bmm(rots, samples.unsqueeze(-1)).squeeze(-1) + self.get_xyz[selected_pts_mask].repeat(N, 1)
-        new_scaling = self.scaling_inverse_activation(self.get_scaling[selected_pts_mask].repeat(N,1) / (0.8*N))
-        new_rotation = self._rotation[selected_pts_mask].repeat(N,1)
+        # new_scaling = self.scaling_inverse_activation(self.get_scaling[selected_pts_mask].repeat(N,1) / (0.8*N))
+        new_scaling = self.scaling_inverse_activation((scl_joint[selected_pts_mask] * self.get_scaling[selected_pts_mask] / (0.8*N)).repeat(N,1) )
+        # new_rotation = self._rotation[selected_pts_mask].repeat(N,1)
+        new_rotation = (matrix_to_quaternion(rot_joint[selected_pts_mask].reshape(-1,3,3)) * self._rotation[selected_pts_mask]).repeat(N,1)
         new_features_dc = self._features_dc[selected_pts_mask].repeat(N,1,1)
         new_features_rest = self._features_rest[selected_pts_mask].repeat(N,1,1)
         new_opacity = self._opacity[selected_pts_mask].repeat(N,1)
@@ -692,12 +713,15 @@ class GaussianModel:
         rot_joint = torch.cat([torch.ones(1,3,3).cuda(),rot_joint],dim=0).reshape(24,9)   # TODO:使用target rot  debug 查看根节点的旋转矩阵
         rot_joint = (lbs_weights[0]@rot_joint).reshape(-1,3,3)
 
+        scl_joint = torch.cat([torch.ones(1,3).cuda(),joint_S],dim=0) 
+        scl_joint = (lbs_weights[0]@scl_joint)
+
         grads[grads.isnan()] = 0.0
 
         # self.densify_and_clone(grads, max_grad, extent)
         # self.densify_and_split(grads, max_grad, extent)
-        self.kl_densify_and_clone(grads,rot_joint, max_grad, extent, kl_threshold)
-        self.kl_densify_and_split(grads, max_grad, extent, kl_threshold)
+        self.kl_densify_and_clone(grads,rot_joint,scl_joint, max_grad, extent, kl_threshold)
+        self.kl_densify_and_split(grads,rot_joint,scl_joint, max_grad, extent, kl_threshold)
         self.kl_merge(grads, max_grad, extent, 0.1)
 
         # TODO: min_opacity
@@ -764,7 +788,7 @@ class GaussianModel:
         # # 关闭图形，释放资源
         # plt.close(fig)
 
-    def cal_kl(self, kl_threshold,rot_joint=None):
+    def cal_kl(self, kl_threshold):
         _, point_ids = self.knn_near_2(self._xyz[None].detach(), self._xyz[None].detach())     
         xyz = self._xyz[point_ids[0]].detach()
         rotation_q = self._rotation[point_ids[0]].detach()   # torch.Size([6890, 4])
@@ -778,34 +802,24 @@ class GaussianModel:
         rotation_1_q = rotation_q[:, 1:].reshape(-1, 4)
         scaling_diag_1 = scaling_diag[:, 1:].reshape(-1, 3)
 
-        if rot_joint!=None:
-            kl_div = self.kl_div(xyz_0, rotation_0_q, scaling_diag_0, xyz_1, rotation_1_q, scaling_diag_1,rot_joint[point_ids[0]].detach())
-        else:
-            kl_div = self.kl_div(xyz_0, rotation_0_q, scaling_diag_0, xyz_1, rotation_1_q, scaling_diag_1)
-                    
+        kl_div = self.kl_div(xyz_0, rotation_0_q, scaling_diag_0, xyz_1, rotation_1_q, scaling_diag_1)
+
         return kl_div > kl_threshold
 
-    def kl_div(self, mu_0, rotation_0_q, scaling_0_diag, mu_1, rotation_1_q, scaling_1_diag, rot_joint=None):
+    def kl_div(self, mu_0, rotation_0_q, scaling_0_diag, mu_1, rotation_1_q, scaling_1_diag):
 
         # claculate cov_0
         rotation_0 = build_rotation(rotation_0_q)
         scaling_0 = build_scaling(scaling_0_diag)
-        if rot_joint!=None:
-            # L_0 = rotation_0 @ scaling_0 @ rot_joint[:, 0]
-            L_0 = rot_joint[:, 0] @ (rotation_0 @ scaling_0)
-        else:
-            L_0 = rotation_0 @ scaling_0
+        
+        L_0 = rotation_0 @ scaling_0
         cov_0 = L_0 @ L_0.transpose(1, 2)
 
         # claculate inverse of cov_1
         rotation_1 = build_rotation(rotation_1_q)
         scaling_1_inv = build_scaling(1/scaling_1_diag)
-        if rot_joint!=None:
-            # L_1_inv = rotation_1 @ scaling_1_inv @ rot_joint[:, 1]
-            L_1_inv = rot_joint[:, 1] @ (rotation_1 @ scaling_1_inv)
-            
-        else:
-            L_1_inv = rotation_1 @ scaling_1_inv
+
+        L_1_inv = rotation_1 @ scaling_1_inv
         cov_1_inv = L_1_inv @ L_1_inv.transpose(1, 2)
 
         # difference of mu_1 and mu_0
@@ -1081,3 +1095,6 @@ def batch_rodrigues(rot_vecs, epsilon=1e-8, dtype=torch.float32):
     ident = torch.eye(3, dtype=dtype, device=device).unsqueeze(dim=0)
     rot_mat = ident + sin * K + (1 - cos) * torch.bmm(K, K)
     return rot_mat
+
+
+
