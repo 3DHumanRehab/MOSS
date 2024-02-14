@@ -575,6 +575,11 @@ def readCamerasZJUMoCapRefine(path, output_view, white_background, image_scaling
             pose_interval = 30
             pose_num = 17
 
+        
+    if split == 'test' and ('377' or '392' in path):
+        # output_view = np.delete(cam_inds,2,axis=1)
+        output_view.remove(3)
+        
     #./my_392/annots.npy
     ann_file = os.path.join(path, 'annots.npy')
     annots = np.load(ann_file, allow_pickle=True).item()
@@ -588,7 +593,15 @@ def readCamerasZJUMoCapRefine(path, output_view, white_background, image_scaling
         np.arange(len(ims_data['ims']))[output_view]
         for ims_data in annots['ims'][pose_start:pose_start + pose_num * pose_interval][::pose_interval]
     ])
+    
+    # Data aug
+    # if split == 'train' :
+    #     mask = np.random.rand(cam_inds.shape[0],1)<0.05
+    #     new_cam = np.random.randint(0, 22, size=(cam_inds.shape[0], 1))
+    #     cam_inds[mask] = new_cam[mask]
+    #     cam_inds[cam_inds==3] = np.random.randint(5,22)
 
+    # TODO: watch these
     if 'CoreView_313' in path or 'CoreView_315' in path:
         for i in range(ims.shape[0]):
             ims[i] = [x.split('/')[0] + '/' + x.split('/')[1].split('_')[4] + '.jpg' for x in ims[i]]

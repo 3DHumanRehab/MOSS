@@ -83,6 +83,9 @@ class OptimizationParams(ParamGroup):
         self.opacity_lr = 0.05
         self.scaling_lr = 0.005
         self.rotation_lr = 0.001
+        self.auto_regression = 0.00025
+        self.cross_attention_lbs = 0.0001
+        
         self.pose_refine_lr = 0.00005
         self.lbs_offset_lr = 0.00005
         self.percent_dense = 0.01

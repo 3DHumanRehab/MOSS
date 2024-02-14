@@ -146,7 +146,7 @@ if __name__ == "__main__":
     args.eval=True
 
     name_list = ['377','386','387','392','393','394']
-    log_name = 'kl_rot'
+    log_name = 'autoregression'
     iteration_list = [3200,3200,2700,3000,2500,2500]
     
     for iteration,data_name in zip(iteration_list,name_list):
@@ -156,7 +156,7 @@ if __name__ == "__main__":
             args.exp_name=f'/HOME/HOME/Caixiang/GauHuman_baseline/output/zju_mocap_refine/my_{args.data_name}_baseline'
             args.iteration='1200'
         else:
-            args.exp_name=f'/HOME/HOME/Caixiang/GauHuman/output/zju_mocap_refine/my_{args.data_name}_{log_name}'
+            args.exp_name=f'/home/zjlab1/workspace/Caixiang/GauHuman_2/output/zju_mocap_refine/my_{args.data_name}_{log_name}'
             args.iteration=iteration
         args.images='images'
         # args.model_path=f'output/{args.exp_name}'
@@ -168,7 +168,7 @@ if __name__ == "__main__":
         args.skip_test=False
         args.skip_train=True
         args.smpl_type='smpl'
-        args.source_path=f'/HOME/HOME/data/ZJU-MoCap/my_{args.data_name}'
+        args.source_path=f'/home/zjlab1/dataset/ZJU_monocap/my_{args.data_name}'
         args.white_background=False
 
         print("=====================================")

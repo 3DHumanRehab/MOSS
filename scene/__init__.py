@@ -96,7 +96,7 @@ class Scene:
             print(model_path)
             print("===="*8)
             if os.path.exists(model_path):
-                ckpt = torch.load(model_path, map_location='cuda:0')
+                ckpt = torch.load(model_path, map_location='cuda')
                 try:
                     self.gaussians.auto_regression.load_state_dict(ckpt['Autoregression'])
                 except:

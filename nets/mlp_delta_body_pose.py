@@ -5,87 +5,163 @@ from collections import defaultdict
 
 # Highlight_autoregression
 
-class Autoregression(nn.Module):
-    def __init__(self,device='cuda'):
-        super(Autoregression,self).__init__()
-        self.device = device
-        mlp_depth=2
-        self.num_joints = 23
-        embedding_size = 69
-        # mlp_width = 128+9 * self.num_joints
-        mlp_width = 128
-        block_mlps = [nn.Linear(embedding_size, mlp_width), nn.ReLU()]
-        
-        for _ in range(0, mlp_depth-1):
-            block_mlps += [nn.Linear(mlp_width, mlp_width), nn.ReLU()]
+if False:
+    class Autoregression(nn.Module):
+        def __init__(self,device='cuda'):
+            super(Autoregression,self).__init__()
+            self.device = device
+            mlp_depth=2
+            self.num_joints = 23
+            embedding_size = 69
+            # mlp_width = 128+9 * self.num_joints
+            mlp_width = 128
+            block_mlps = [nn.Linear(embedding_size, mlp_width), nn.ReLU()]
+            
+            for _ in range(0, mlp_depth-1):
+                block_mlps += [nn.Linear(mlp_width, mlp_width), nn.ReLU()]
 
-        block_mlps += [nn.Linear(mlp_width, 3 * self.num_joints)] 
+            block_mlps += [nn.Linear(mlp_width, 3 * self.num_joints)] 
 
-        self.block_mlps = nn.Sequential(*block_mlps)
-        # init the weights of the last layer as very small value
-        # -- at the beginning, we hope the rotation matrix can be identity 
-        init_val = 1e-5
-        last_layer = self.block_mlps[-1]
-        last_layer.weight.data.uniform_(-init_val, init_val)
-        last_layer.bias.data.zero_()
-        self.rodriguez = RodriguesModule()
-        
-        
-    def forward(self,feature):
-        joint_F = self.block_mlps(feature[:, 3:]).view(-1, 3)  #(1,69)->mlp->(1,69)->(23,3)
-        joint_F = self.rodriguez(joint_F)  # (23,3)   -> (23,3,3)
+            self.block_mlps = nn.Sequential(*block_mlps)
+            # init the weights of the last layer as very small value
+            # -- at the beginning, we hope the rotation matrix can be identity 
+            init_val = 1e-5
+            last_layer = self.block_mlps[-1]
+            last_layer.weight.data.uniform_(-init_val, init_val)
+            last_layer.bias.data.zero_()
+            self.rodriguez = RodriguesModule()
+            
+            
+        def forward(self,feature):
+            joint_F = self.block_mlps(feature[:, 3:]).view(-1, 3)  #(1,69)->mlp->(1,69)->(23,3)
+            joint_F = self.rodriguez(joint_F)  # (23,3)   -> (23,3,3)
 
-        joint_U, joint_S, joint_V = torch.svd(joint_F)  # (Joints, 3, 3), (Joints, 3), (Joints, 3, 3)
+            joint_U, joint_S, joint_V = torch.svd(joint_F)  # (Joints, 3, 3), (Joints, 3), (Joints, 3, 3)
 
-        return {
-            "Rs": joint_F,
-            "pose_U":joint_U,
-            "pose_S":joint_S,
-            "pose_V":joint_V,
-        }
+            return {
+                "Rs": joint_F,
+                "pose_U":joint_U,
+                "pose_S":joint_S,
+                "pose_V":joint_V,
+            }
 
+else:
+    class Autoregression(nn.Module):
+        def __init__(self,device='cuda'):
+            super(Autoregression,self).__init__()
+            self.device = device
+            mlp_depth=2
+            self.num_joints = 23
+            embedding_size = 69
+            # mlp_width = 128+9 * self.num_joints
+            mlp_width = 128
+            out_dim = 3
+            block_mlps = [nn.Linear(embedding_size, mlp_width), nn.ReLU()]
+            for _ in range(0, mlp_depth-1):
+                block_mlps += [nn.Linear(mlp_width, mlp_width), nn.ReLU()]
 
-# class Autoregression(nn.Module):
+            block_mlps += [nn.Linear(mlp_width, 3 * self.num_joints)] 
+
+            self.block_mlps = nn.Sequential(*block_mlps)
+
+            # init the weights of the last layer as very small value
+            # -- at the beginning, we hope the rotation matrix can be identity 
+            init_val = 1e-5
+            # last_layer = self.block_mlps[-1]
+            # last_layer.weight.data.uniform_(-init_val, init_val)
+            # last_layer.bias.data.zero_()
+            self.rodriguez = RodriguesModule()
+            self.fc_pose = []
+            self.parents_dict = self.immediate_parent_to_all_ancestors()
+            for joint in range(self.num_joints):
+                num_parents = len(self.parents_dict[joint])
+                input_dim = 3 + num_parents * out_dim #(9 + 3 + 9) 
+                # fc = nn.Sequential(nn.Linear(input_dim, mlp_width // 2),
+                #                                 self.activation,
+                #                                 nn.Linear(mlp_width // 2, self.joint_dim))
+                                                #   nn.Linear(embed_dim // 2, 3))
+                                                #   nn.Linear(embed_dim // 2, 9)))
+                fc = nn.Sequential(nn.Linear(input_dim,out_dim))
+                fc[-1].weight.data.uniform_(-init_val, init_val)
+                fc[-1].bias.data.zero_()
+                self.fc_pose.append(fc)
+            self.fc_pose = nn.Sequential(*self.fc_pose)
+                        
+        def immediate_parent_to_all_ancestors(self,immediate_parents=[-1,0,0,0,1,2,3,4,5,6,7,8,9,9,9,12,13,14,16,17,18,19,20,21]):
+            """
+            :param immediate_parents: list with len = num joints, contains index of each joint's parent.
+                    - includes root joint, but its parent index is -1.
+            :return: ancestors_dict: dict of lists, dict[joint] is ordered list of parent joints.
+                    - DOES NOT INCLUDE ROOT JOINT! Joint 0 here is actually joint 1 in SMPL.
+            """
+            ancestors_dict = defaultdict(list)
+            for i in range(1, len(immediate_parents)):  # Excluding root joint
+                joint = i - 1
+                immediate_parent = immediate_parents[i] - 1
+                if immediate_parent >= 0:
+                    ancestors_dict[joint] += [immediate_parent] + ancestors_dict[immediate_parent]
+            return ancestors_dict
+            
+        def forward(self,feature):
+            joint_F = self.block_mlps(feature[:, 3:])
+            
+            joint_F = joint_F.reshape(1,23,3)
+            auto_joint_F = torch.zeros_like(joint_F,device=joint_F.device)
+            
+            for joint in range(self.num_joints):
+                parents = self.parents_dict[joint]
+                fc_joint = self.fc_pose[joint]
+                embed = joint_F[:, joint]
+                if len(parents) > 0:
+                    embed = embed.unsqueeze(1)
+                    parents_embed = joint_F[:, parents]
+                    auto_joint_F[:, joint] = fc_joint(torch.cat([embed, parents_embed], dim=1).reshape(1,-1))
+                else:
+                    auto_joint_F[:, joint] = fc_joint(embed)
+
+            auto_joint_F = self.rodriguez(auto_joint_F[0])
+
+            joint_U, joint_S, joint_V = torch.svd(auto_joint_F)  # (Joints, 3, 3), (Joints, 3), (Joints, 3, 3)
+
+            return {
+                "Rs": auto_joint_F,
+                "pose_U":joint_U,
+                "pose_S":joint_S,
+                "pose_V":joint_V,
+            }
+
+# class Autoregression_autoregression(nn.Module):
 #     def __init__(self,device='cuda'):
-#         super(Autoregression,self).__init__()
+#         super(Autoregression_autoregression,self).__init__()
 #         self.device = device
-#         mlp_depth=2
+#         embed_dim = 64
+#         self.num_glob_params = 24*3
+#         self.num_cam_params = 0
+#         # self.num_cam_params = 3
+#         # self.num_shape_params= 10
+#         self.num_shape_params= 0
+#         self.joint_dim = 9  # 3
+#         self.parents_dict = self.immediate_parent_to_all_ancestors() # SMPL.parents.tolist()
+#         self.fc_embed = nn.Linear(self.num_shape_params  + self.num_glob_params + self.num_cam_params,
+#                                 embed_dim)
+#         self.activation = nn.ELU()
 #         self.num_joints = 23
-#         embedding_size = 69
-#         # mlp_width = 128+9 * self.num_joints
-#         mlp_width = 128
-#         out_dim = 3
-#         block_mlps = [nn.Linear(embedding_size, mlp_width), nn.ReLU()]
-#         for _ in range(0, mlp_depth-1):
-#             block_mlps += [nn.Linear(mlp_width, mlp_width), nn.ReLU()]
 
-#         block_mlps += [nn.Linear(mlp_width, 3 * self.num_joints)] 
-
-#         self.block_mlps = nn.Sequential(*block_mlps)
-
-#         # init the weights of the last layer as very small value
-#         # -- at the beginning, we hope the rotation matrix can be identity 
+#         self.fc_pose = nn.ModuleList()
 #         init_val = 1e-5
-#         # last_layer = self.block_mlps[-1]
-#         # last_layer.weight.data.uniform_(-init_val, init_val)
-#         # last_layer.bias.data.zero_()
 #         self.rodriguez = RodriguesModule()
-#         self.fc_pose = []
-#         self.parents_dict = self.immediate_parent_to_all_ancestors()
 #         for joint in range(self.num_joints):
 #             num_parents = len(self.parents_dict[joint])
-#             input_dim = 3 + num_parents * out_dim #(9 + 3 + 9) 
-#             # fc = nn.Sequential(nn.Linear(input_dim, mlp_width // 2),
-#             #                                 self.activation,
-#             #                                 nn.Linear(mlp_width // 2, self.joint_dim))
+#             input_dim = embed_dim + num_parents * (9 + 3 + 9) 
+#             fc = nn.Sequential(nn.Linear(input_dim, embed_dim // 2),
+#                                             self.activation,
+#                                             nn.Linear(embed_dim // 2, self.joint_dim))
 #                                             #   nn.Linear(embed_dim // 2, 3))
 #                                             #   nn.Linear(embed_dim // 2, 9)))
-#             fc = nn.Sequential(nn.Linear(input_dim,out_dim))
 #             fc[-1].weight.data.uniform_(-init_val, init_val)
 #             fc[-1].bias.data.zero_()
 #             self.fc_pose.append(fc)
-#         self.fc_pose = nn.Sequential(*self.fc_pose)
-                    
+            
 #     def immediate_parent_to_all_ancestors(self,immediate_parents=[-1,0,0,0,1,2,3,4,5,6,7,8,9,9,9,12,13,14,16,17,18,19,20,21]):
 #         """
 #         :param immediate_parents: list with len = num joints, contains index of each joint's parent.
@@ -100,139 +176,64 @@ class Autoregression(nn.Module):
 #             if immediate_parent >= 0:
 #                 ancestors_dict[joint] += [immediate_parent] + ancestors_dict[immediate_parent]
 #         return ancestors_dict
-        
-#     def forward(self,feature):
-#         joint_F = self.block_mlps(feature[:, 3:])
-        
-#         joint_F = joint_F.reshape(1,23,3)
-#         auto_joint_F = torch.zeros_like(joint_F,device=joint_F.device)
-        
+
+#     # def forward(self,shape_params, glob, cam):
+#     def forward(self, glob):
+#         # Pose
+#         embed = self.activation(self.fc_embed(torch.cat([glob], dim=1)))  # (bsize, embed dim)
+#         batch_size = embed.shape[0]
+#         pose_F = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
+#         pose_U = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
+#         pose_S = torch.zeros(batch_size, self.num_joints, 3, device=self.device)  # (bsize, 23, 3)
+#         pose_V = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
+#         pose_U_proper = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
+#         pose_S_proper = torch.zeros(batch_size, self.num_joints, 3, device=self.device)  # (bsize, 23, 3)
+#         pose_rotmats_mode = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
 #         for joint in range(self.num_joints):
 #             parents = self.parents_dict[joint]
 #             fc_joint = self.fc_pose[joint]
-#             embed = joint_F[:, joint]
 #             if len(parents) > 0:
-#                 embed = embed.unsqueeze(1)
-#                 parents_embed = joint_F[:, parents]
-#                 auto_joint_F[:, joint] = fc_joint(torch.cat([embed, parents_embed], dim=1).reshape(1,-1))
+#                 parents_U_proper = pose_U_proper[:, parents, :, :].view(batch_size, -1)  # (bsize, num parents * 3 * 3)
+#                 parents_S_proper = pose_S_proper[:, parents, :].view(batch_size, -1)  # (bsize, num parents * 3)
+#                 parents_mode = pose_rotmats_mode[:, parents, :, :].view(batch_size, -1)  # (bsize, num parents * 3 * 3)
+
+#                 joint_F = fc_joint(torch.cat([embed, parents_U_proper, parents_S_proper, parents_mode], dim=1))
 #             else:
-#                 auto_joint_F[:, joint] = fc_joint(embed)
+#                 joint_F = fc_joint(embed)
+#             # joint_F = self.rodriguez(joint_F)
+#             joint_F = joint_F.view(-1,3,3)
 
-#         auto_joint_F = self.rodriguez(auto_joint_F[0])
+#             joint_U, joint_S, joint_V = torch.svd(joint_F.view(-1,3,3).cpu())  # (bsize, 3, 3), (bsize, 3), (bsize, 3, 3)
 
-#         joint_U, joint_S, joint_V = torch.svd(auto_joint_F)  # (Joints, 3, 3), (Joints, 3), (Joints, 3, 3)
+#             with torch.no_grad():
+#                 det_joint_U, det_joint_V = torch.det(joint_U).to(self.device), torch.det(joint_V).to(self.device)  # (bsize,), (bsize,)
+#             joint_U, joint_S, joint_V = joint_U.to(self.device), joint_S.to(self.device), joint_V.to(self.device)
+
+#             # "Proper" SVD
+#             joint_U_proper = joint_U.clone()
+#             joint_S_proper = joint_S.clone()
+#             joint_V_proper = joint_V.clone()
+#             # Ensure that U_proper and V_proper are rotation matrices (orthogonal with det = 1).
+#             joint_U_proper[:, :, 2] *= det_joint_U.unsqueeze(-1)
+#             joint_S_proper[:, 2] *= det_joint_U * det_joint_V
+#             joint_V_proper[:, :, 2] *= det_joint_V.unsqueeze(-1)
+
+#             joint_rotmat_mode = torch.matmul(joint_U_proper, joint_V_proper.transpose(dim0=-1, dim1=-2))
+
+#             pose_F[:, joint, :, :] = joint_F
+#             pose_U[:, joint, :, :] = joint_U
+#             pose_S[:, joint, :] = joint_S
+#             pose_V[:, joint, :, :] = joint_V
+#             pose_U_proper[:, joint, :, :] = joint_U_proper
+#             pose_S_proper[:, joint, :] = joint_S_proper
+#             pose_rotmats_mode[:, joint, :, :] = joint_rotmat_mode
 
 #         return {
-#             "Rs": auto_joint_F,
-#             "pose_U":joint_U,
-#             "pose_S":joint_S,
-#             "pose_V":joint_V,
+#             "Rs": pose_F,
+#             "pose_U":pose_U,
+#             "pose_S":pose_S,
+#             "pose_V":pose_V,
 #         }
-
-class Autoregression_autoregression(nn.Module):
-    def __init__(self,device='cuda'):
-        super(Autoregression_autoregression,self).__init__()
-        self.device = device
-        embed_dim = 64
-        self.num_glob_params = 24*3
-        self.num_cam_params = 0
-        # self.num_cam_params = 3
-        # self.num_shape_params= 10
-        self.num_shape_params= 0
-        self.joint_dim = 9  # 3
-        self.parents_dict = self.immediate_parent_to_all_ancestors() # SMPL.parents.tolist()
-        self.fc_embed = nn.Linear(self.num_shape_params  + self.num_glob_params + self.num_cam_params,
-                                embed_dim)
-        self.activation = nn.ELU()
-        self.num_joints = 23
-
-        self.fc_pose = nn.ModuleList()
-        init_val = 1e-5
-        self.rodriguez = RodriguesModule()
-        for joint in range(self.num_joints):
-            num_parents = len(self.parents_dict[joint])
-            input_dim = embed_dim + num_parents * (9 + 3 + 9) 
-            fc = nn.Sequential(nn.Linear(input_dim, embed_dim // 2),
-                                            self.activation,
-                                            nn.Linear(embed_dim // 2, self.joint_dim))
-                                            #   nn.Linear(embed_dim // 2, 3))
-                                            #   nn.Linear(embed_dim // 2, 9)))
-            fc[-1].weight.data.uniform_(-init_val, init_val)
-            fc[-1].bias.data.zero_()
-            self.fc_pose.append(fc)
-            
-    def immediate_parent_to_all_ancestors(self,immediate_parents=[-1,0,0,0,1,2,3,4,5,6,7,8,9,9,9,12,13,14,16,17,18,19,20,21]):
-        """
-        :param immediate_parents: list with len = num joints, contains index of each joint's parent.
-                - includes root joint, but its parent index is -1.
-        :return: ancestors_dict: dict of lists, dict[joint] is ordered list of parent joints.
-                - DOES NOT INCLUDE ROOT JOINT! Joint 0 here is actually joint 1 in SMPL.
-        """
-        ancestors_dict = defaultdict(list)
-        for i in range(1, len(immediate_parents)):  # Excluding root joint
-            joint = i - 1
-            immediate_parent = immediate_parents[i] - 1
-            if immediate_parent >= 0:
-                ancestors_dict[joint] += [immediate_parent] + ancestors_dict[immediate_parent]
-        return ancestors_dict
-
-    # def forward(self,shape_params, glob, cam):
-    def forward(self, glob):
-        # Pose
-        embed = self.activation(self.fc_embed(torch.cat([glob], dim=1)))  # (bsize, embed dim)
-        batch_size = embed.shape[0]
-        pose_F = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
-        pose_U = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
-        pose_S = torch.zeros(batch_size, self.num_joints, 3, device=self.device)  # (bsize, 23, 3)
-        pose_V = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
-        pose_U_proper = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
-        pose_S_proper = torch.zeros(batch_size, self.num_joints, 3, device=self.device)  # (bsize, 23, 3)
-        pose_rotmats_mode = torch.zeros(batch_size, self.num_joints, 3, 3, device=self.device)  # (bsize, 23, 3, 3)
-        for joint in range(self.num_joints):
-            parents = self.parents_dict[joint]
-            fc_joint = self.fc_pose[joint]
-            if len(parents) > 0:
-                parents_U_proper = pose_U_proper[:, parents, :, :].view(batch_size, -1)  # (bsize, num parents * 3 * 3)
-                parents_S_proper = pose_S_proper[:, parents, :].view(batch_size, -1)  # (bsize, num parents * 3)
-                parents_mode = pose_rotmats_mode[:, parents, :, :].view(batch_size, -1)  # (bsize, num parents * 3 * 3)
-
-                joint_F = fc_joint(torch.cat([embed, parents_U_proper, parents_S_proper, parents_mode], dim=1))
-            else:
-                joint_F = fc_joint(embed)
-            # joint_F = self.rodriguez(joint_F)
-            joint_F = joint_F.view(-1,3,3)
-
-            joint_U, joint_S, joint_V = torch.svd(joint_F.view(-1,3,3).cpu())  # (bsize, 3, 3), (bsize, 3), (bsize, 3, 3)
-
-            with torch.no_grad():
-                det_joint_U, det_joint_V = torch.det(joint_U).to(self.device), torch.det(joint_V).to(self.device)  # (bsize,), (bsize,)
-            joint_U, joint_S, joint_V = joint_U.to(self.device), joint_S.to(self.device), joint_V.to(self.device)
-
-            # "Proper" SVD
-            joint_U_proper = joint_U.clone()
-            joint_S_proper = joint_S.clone()
-            joint_V_proper = joint_V.clone()
-            # Ensure that U_proper and V_proper are rotation matrices (orthogonal with det = 1).
-            joint_U_proper[:, :, 2] *= det_joint_U.unsqueeze(-1)
-            joint_S_proper[:, 2] *= det_joint_U * det_joint_V
-            joint_V_proper[:, :, 2] *= det_joint_V.unsqueeze(-1)
-
-            joint_rotmat_mode = torch.matmul(joint_U_proper, joint_V_proper.transpose(dim0=-1, dim1=-2))
-
-            pose_F[:, joint, :, :] = joint_F
-            pose_U[:, joint, :, :] = joint_U
-            pose_S[:, joint, :] = joint_S
-            pose_V[:, joint, :, :] = joint_V
-            pose_U_proper[:, joint, :, :] = joint_U_proper
-            pose_S_proper[:, joint, :] = joint_S_proper
-            pose_rotmats_mode[:, joint, :, :] = joint_rotmat_mode
-
-        return {
-            "Rs": pose_F,
-            "pose_U":pose_U,
-            "pose_S":pose_S,
-            "pose_V":pose_V,
-        }
 
 
 

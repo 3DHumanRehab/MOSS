@@ -92,7 +92,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         else:
             bweights = None
             correct_Rs = None
-            lbs_weights = Noned
+            lbs_weights = None
             means3D = torch.matmul(transforms, means3D[..., None]).squeeze(-1) + translation
 
     means3D = means3D.squeeze()  # torch.Size([6890, 3])
