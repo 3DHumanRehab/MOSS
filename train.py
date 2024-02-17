@@ -10,7 +10,7 @@
 #
 
 import os
-#os.environ["CUDA_VISIBLE_DEVICES"] = '6'
+os.environ["CUDA_VISIBLE_DEVICES"] = '6'
 import cv2
 import time
 import copy
@@ -21,7 +21,7 @@ import numpy as np
 from tqdm import tqdm
 from random import randint
 from utils.image_utils import psnr
-from scene import Scene, GaussianModel #Scene为scene自带;GaussianModel为自定义
+from scene import Scene, GaussianModel
 from utils.general_utils import safe_state
 from argparse import ArgumentParser, Namespace
 from gaussian_renderer import render, network_gui #model
@@ -31,7 +31,7 @@ from utils.loss_utils import l1_loss, l2_loss, ssim,matrix_fisher_nll,s3im_fun
 
 from setproctitle import setproctitle
 
-setproctitle("Caixiang")
+setproctitle("Caixiang ablation")
 try:
     from torch.utils.tensorboard import SummaryWriter
     TENSORBOARD_FOUND = True
@@ -141,20 +141,24 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         s3im_loss = s3im_fun(img_pred, img_gt)
         
-        data = render_pkg['pose_out']
-        pred_F,pred_U,pred_S,pred_V,target_R = data['Rs'],data['pose_U'],data['pose_S'],data['pose_V'],data['target_R']
-        joint_F += pred_F
-        nll_loss = matrix_fisher_nll(pred_F,pred_U,pred_S,pred_V,target_R)
-        nll_loss = nll_loss.mean()   # tensor(4.1514e-07)
+        
+        # FIXME: Loss Fisher
+        nll_loss = s3im_loss
+        
+        # data = render_pkg['pose_out']
+        # pred_F,pred_U,pred_S,pred_V,target_R = data['Rs'],data['pose_U'],data['pose_S'],data['pose_V'],data['target_R']
+        # joint_F += pred_F
+        # nll_loss = matrix_fisher_nll(pred_F,pred_U,pred_S,pred_V,target_R)
+        # nll_loss = nll_loss.mean() 
 
+
+        # FIXME: Loss Fisher
+        loss = Ll1 + 0.5 * mask_loss +  0.2* (1.0 - ssim_loss) +  0.5* lpips_loss  + 0.3 * s3im_loss
+        # loss = Ll1 + 0.5 * mask_loss +  0.2* (1.0 - ssim_loss) +  0.5* lpips_loss +  0.06 * nll_loss + 0.3 * s3im_loss
         # loss = Ll1 + 0.5 * mask_loss + float(test1) * (1.0 - ssim_loss) + float(test2) * lpips_loss + float(test3) * nll_loss +float(test4) * s3im_loss  # TODO:
-        loss = Ll1 + 0.5 * mask_loss +  0.2* (1.0 - ssim_loss) +  0.5* lpips_loss +  0.06*nll_loss + 0.3 * s3im_loss
-        # loss = Ll1 + 0.5 * mask_loss + 0.01 * (1.0 - ssim_loss) + 0.01 * lpips_loss
-        # loss = Ll1 + 0.01 * nll_loss + 0.01 * s3im_loss
-        # loss = Ll1 + 0.1 * nll_loss + 0.1 * s3im_loss
-        # loss = Ll1 + 0.5 * mask_loss + (0.01 * (1.0 - ssim_loss) + 0.01 * lpips_loss + 0.01 * nll_loss +0.01 * s3im_loss)*10
-        LOSS = loss.item()
-        nni.report_intermediate_result(LOSS)
+
+
+        # nni.report_intermediate_result(loss.item())
         loss.backward()
 
         # end time
@@ -187,8 +191,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             lp = training_report(tb_writer, iteration, Ll1, loss, l1_loss, iter_start.elapsed_time(iter_end), testing_iterations, scene, render, (pipe, background))
             if lp != None:
                 lp_list.append(lp)
-            if iteration == opt.iterations:
-                nni.report_final_result(min(lp_list))
+            # if iteration == opt.iterations:
+            #     nni.report_final_result(min(lp_list))
             if (iteration in saving_iterations):
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
                 scene.save(iteration)
@@ -354,9 +358,9 @@ if __name__ == "__main__":
     
     #name_list = ['393','394'] 
     # name_list = ['377']
+    #name_list = ['393','394'] 
     name_list = ['377','386','387','392','393','394'] 
-    # name_list = ['377','386','387','392','393','394'] 
-    file_name = 'normal_autoregression.txt'
+    file_name = 'w_o_all.txt'
     save_path = f'result/{file_name}'
     file = open(save_path, 'a')
 
@@ -367,24 +371,16 @@ if __name__ == "__main__":
         #args = parser.parse_args(sys_list)
         args, _ = parser.parse_known_args(sys_list)
         args.save_iterations.append(args.iterations)
-        
-        #args = vars(args)
-        #print(args[model_path])
-        #args.update(tuner_params)
+
         tuner_params = nni.get_next_parameter()
         params = vars(merge_parameter(args, tuner_params))
-        #args = argparse.Namespace(**params)
-        #args = vars(args)
-        #print("Optimizing " + args['model_path'])
-        # Initialize system state (RNG)
+
         safe_state(params['quiet'])
-        
         # Start GUI server, configure and run training
         # network_gui.init(args.ip, args.port)
         torch.autograd.set_detect_anomaly(params['detect_anomaly'])
         training(lp.extract(argparse.Namespace(**params)), op.extract(argparse.Namespace(**params)), pp.extract(argparse.Namespace(**params)), params['test_iterations'], params['save_iterations'], params['checkpoint_iterations'], params['start_checkpoint'], params['debug_from'],file)
         
-
     # All done
     file.close()
     print("\nTraining complete.")

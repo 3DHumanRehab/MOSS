@@ -145,9 +145,14 @@ if __name__ == "__main__":
     args.debug=False
     args.eval=True
 
-    name_list = ['377','386','387','392','393','394']
-    log_name = 'autoregression'
-    iteration_list = [3200,3200,2700,3000,2500,2500]
+    # name_list = ['377','386','387','392','393','394']
+    # log_name = 'normal_autoregression_and'
+    # iteration_list = [2700,3200,2700,3000,2500,2500]
+    
+    name_list = ['377']
+    log_name = 'normal_autoregression_and'
+    iteration_list = [2700]
+    
     
     for iteration,data_name in zip(iteration_list,name_list):
         args.data_name = data_name

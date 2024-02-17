@@ -39,6 +39,8 @@ class CrossAttention_lbs(nn.Module):
             if i in self.skips:
                 net = torch.cat((features, net), dim=1)
         query = self.bw_fc(net).permute(0,2,1)
+        
+        if key.shape[0]!=1:key = key.unsqueeze(0)
  
         key = torch.cat([torch.ones(1,1,3,3).cuda(),key],dim=1).reshape(1,24,9)
  
