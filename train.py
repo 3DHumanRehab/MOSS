@@ -156,7 +156,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # loss = Ll1 + 0.1 * mask_loss +  0.01* (1.0 - ssim_loss) +  0.01* lpips_loss
         # loss = Ll1 + 0.1 * mask_loss + 0.01* lpips_loss
         # loss = Ll1 + 0.1 * mask_loss 
-        loss = Ll1 
+        loss = Ll1 + 0.01* lpips_loss
         # loss = Ll1 + 0.1 * mask_loss +  0.01* (1.0 - ssim_loss)
         # loss = Ll1 + 0.5 * mask_loss +  0.2* (1.0 - ssim_loss) +  0.5* lpips_loss  + 0.3 * s3im_loss
         # loss = Ll1 + 0.5 * mask_loss +  0.2* (1.0 - ssim_loss) +  0.5* lpips_loss +  0.06 * nll_loss + 0.3 * s3im_loss
@@ -366,7 +366,7 @@ if __name__ == "__main__":
     #name_list = ['393','394'] 
     name_list = ['377','386','387','392','393','394'] 
     # file_name = 'w_o_autoregression.txt'
-    file_name = 'MLP.txt'   # temp
+    file_name = 'autoregression.txt'   # temp
     save_path = f'result/{file_name}'
     file = open(save_path, 'a')
 
