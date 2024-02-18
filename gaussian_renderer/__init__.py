@@ -68,13 +68,14 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             # highlight_train
             # Ours
             pose_out = pc.auto_regression(viewpoint_camera.smpl_param['poses'],)       # torch.Size([1, 72])
-            pose_out['target_R'] = viewpoint_camera.smpl_param['pose_rotmats']
+            correct_Rs = pose_out['Rs']
             
-            pose_ = viewpoint_camera.smpl_param['poses']
-            batch_size = pose_.shape[0]
-            rot_mats = batch_rodrigues(pose_.view(-1, 3)).view([batch_size, -1, 3, 3])
-            rot_mats_no_root = rot_mats[:, 1:]
-            correct_Rs = torch.matmul(rot_mats_no_root.reshape(-1, 3, 3), pose_out['Rs'].reshape(-1, 3, 3)).reshape(-1, 23, 3, 3)
+            # pose_out['target_R'] = viewpoint_camera.smpl_param['pose_rotmats']
+            # pose_ = viewpoint_camera.smpl_param['poses']
+            # batch_size = pose_.shape[0]
+            # rot_mats = batch_rodrigues(pose_.view(-1, 3)).view([batch_size, -1, 3, 3])
+            # rot_mats_no_root = rot_mats[:, 1:]
+            # correct_Rs = torch.matmul(rot_mats_no_root.reshape(-1, 3, 3), pose_out['Rs'].reshape(-1, 3, 3)).reshape(-1, 23, 3, 3)
 
             # Baseline  
             # pose_out = pc.pose_decoder(viewpoint_camera.smpl_param['poses'][:, 3:])  

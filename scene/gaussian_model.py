@@ -568,13 +568,13 @@ class GaussianModel:
         # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & knn_selected_pts_mask & kl_selected_pts_mask_2
         
         
-        normals = self.compute_normals_co3d(self._xyz)
-        # mean_angle = compute_mean_angle(points, normals)
-        # normal_angle_mask = mean_angle > angle_threshold
-        angle_threshold = 0.1
-        distance_threshold = 0.05
-        normal_angle_mask = self.compute_angle_change_rate(self._xyz,normals,angle_threshold,distance_threshold)
-        print("normal_angle_mask",normal_angle_mask.sum())
+        # normals = self.compute_normals_co3d(self._xyz)
+        # # mean_angle = compute_mean_angle(points, normals)
+        # # normal_angle_mask = mean_angle > angle_threshold
+        # angle_threshold = 0.1
+        # distance_threshold = 0.05
+        # normal_angle_mask = self.compute_angle_change_rate(self._xyz,normals,angle_threshold,distance_threshold)
+        # print("normal_angle_mask",normal_angle_mask.sum())
         
         # FIXME: normal_angle_mask
         selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask 

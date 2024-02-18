@@ -3,9 +3,9 @@ import torch.nn as nn
 import math
 from collections import defaultdict 
 
-# Highlight_autoregression
+# FIXME: autoregression
 
-if False:
+if True:
     class Autoregression(nn.Module):
         def __init__(self,device='cuda'):
             super(Autoregression,self).__init__()
