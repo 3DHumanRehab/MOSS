@@ -45,7 +45,7 @@ from nni.utils import merge_parameter
 loss_fn_vgg = lpips.LPIPS(net='vgg').to(torch.device('cuda', torch.cuda.current_device()))
 
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from,file):
-    print(opt.__dict__)
+    # print(opt.__dict__)
     first_iter = 0
     tb_writer = prepare_output_and_logger(dataset)
     gaussians = GaussianModel(dataset.sh_degree, dataset.smpl_type, dataset.motion_offset_flag, dataset.actor_gender)
@@ -157,7 +157,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # loss = Ll1 + 0.1 * mask_loss + 0.01* lpips_loss
         # loss = Ll1 + 0.1 * mask_loss 
         # loss = Ll1 + 0.01* lpips_loss
-        loss = Ll1 + 0.5* (1.0 - ssim_loss)
+        loss = Ll1 + 0.05* (1.0 - ssim_loss)+  0.1* lpips_loss
         # loss = Ll1 + 0.1 * mask_loss +  0.01* (1.0 - ssim_loss)
         # loss = Ll1 + 0.5 * mask_loss +  0.2* (1.0 - ssim_loss) +  0.5* lpips_loss  + 0.3 * s3im_loss
         # loss = Ll1 + 0.5 * mask_loss +  0.2* (1.0 - ssim_loss) +  0.5* lpips_loss +  0.06 * nll_loss + 0.3 * s3im_loss
@@ -367,7 +367,7 @@ if __name__ == "__main__":
     #name_list = ['393','394'] 
     name_list = ['377','386','387','392','393','394'] 
     # file_name = 'w_o_autoregression.txt'
-    file_name = 'crossattension.txt'   # temp
+    file_name = 'autoregression_crossattension.txt'   # temp
     save_path = f'result/{file_name}'
     file = open(save_path, 'a')
 
