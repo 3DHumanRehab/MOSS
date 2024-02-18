@@ -360,7 +360,7 @@ if __name__ == "__main__":
     # name_list = ['377']
     #name_list = ['393','394'] 
     name_list = ['377','386','387','392','393','394'] 
-    file_name = 'w_o_all.txt'
+    file_name = 'autoregression.txt'
     save_path = f'result/{file_name}'
     file = open(save_path, 'a')
 
@@ -384,4 +384,3 @@ if __name__ == "__main__":
     # All done
     file.close()
     print("\nTraining complete.")
-    
