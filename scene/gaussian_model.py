@@ -586,7 +586,7 @@ class GaussianModel:
         # FIXME: density get_scaling
         # stds = self.get_scaling[selected_pts_mask]
         stds = scl_joint[selected_pts_mask]*self.get_scaling[selected_pts_mask]
-        
+ 
         means = torch.zeros((stds.size(0), 3),device="cuda")
         samples = torch.normal(mean=means, std=stds)
         rots = build_rotation(self._rotation[selected_pts_mask])  # (*,3,3)
@@ -645,7 +645,7 @@ class GaussianModel:
         # print("normal_angle_mask",normal_angle_mask.sum())
         # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & normal_angle_mask  # ME
         
-        # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask
+        selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask
 
         print("[kl split]: ", (selected_pts_mask).sum().item())
 

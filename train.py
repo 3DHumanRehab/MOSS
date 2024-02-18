@@ -367,7 +367,7 @@ if __name__ == "__main__":
     #name_list = ['393','394'] 
     name_list = ['377','386','387','392','393','394'] 
     # file_name = 'w_o_autoregression.txt'
-    file_name = 'autoregression_crossattension.txt'   # temp
+    file_name = 'best_2.txt'   # temp
     save_path = f'result/{file_name}'
     file = open(save_path, 'a')
 
