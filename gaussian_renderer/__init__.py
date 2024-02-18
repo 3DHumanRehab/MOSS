@@ -86,10 +86,10 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             # correct_Rs = None
 
             # Baseline
-            # lbs_weights = pc.weight_offset_decoder(means3D[None].detach()) # torch.Size([1, 6890, 3])
-            # lbs_weights = lbs_weights.permute(0,2,1)                       # torch.Size([1, 6890, 24])
+            lbs_weights = pc.weight_offset_decoder(means3D[None].detach()) # torch.Size([1, 6890, 3])
+            lbs_weights = lbs_weights.permute(0,2,1)                       # torch.Size([1, 6890, 24])
             # correct_Rs = None
-            lbs_weights = None
+            # lbs_weights = None
             _, means3D, bweights, transforms, translation = pc.coarse_deform_c2source(means3D[None], viewpoint_camera.smpl_param,viewpoint_camera.big_pose_smpl_param,viewpoint_camera.big_pose_world_vertex[None], lbs_weights=lbs_weights, correct_Rs=correct_Rs, return_transl=return_smpl_rot)
         else:
             bweights = None
