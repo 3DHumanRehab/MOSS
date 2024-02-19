@@ -569,17 +569,17 @@ class GaussianModel:
         print("[kl clone]: ", (selected_pts_mask).sum().item())
 
         # FIXME: density get_scaling
-        # stds = self.get_scaling[selected_pts_mask]
-        stds = scl_joint[selected_pts_mask]*self.get_scaling[selected_pts_mask]
+        stds = self.get_scaling[selected_pts_mask]
+        # stds = scl_joint[selected_pts_mask]*self.get_scaling[selected_pts_mask]
  
         means = torch.zeros((stds.size(0), 3),device="cuda")
         samples = torch.normal(mean=means, std=stds)
         rots = build_rotation(self._rotation[selected_pts_mask])  # (*,3,3)
 
         # FIXME: density rots
-        # rots = rots
+        rots = rots
         # rots = rots @ rot_joint[selected_pts_mask].reshape(-1,3,3)
-        rots = rot_joint[selected_pts_mask].reshape(-1,3,3) @ rots  # ME
+        # rots = rot_joint[selected_pts_mask].reshape(-1,3,3) @ rots  # ME
         
         new_xyz = torch.bmm(rots, samples.unsqueeze(-1)).squeeze(-1) + self.get_xyz[selected_pts_mask]
         
