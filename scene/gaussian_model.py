@@ -304,7 +304,7 @@ class GaussianModel:
     def save_ply(self, path,point_cloud=None):
         mkdir_p(os.path.dirname(path))
         
-        if point_cloud=None:
+        if point_cloud==None:
             xyz = self._xyz.detach().cpu().numpy()
         else:
             xyz = point_cloud.detach().cpu().numpy()
@@ -551,7 +551,6 @@ class GaussianModel:
         # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & knn_selected_pts_mask
         # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & knn_selected_pts_mask & kl_selected_pts_mask_2
         
-        
         # FIXME: normal_angle_mask
         normals = self.compute_normals_co3d(self._xyz)
         # mean_angle = compute_mean_angle(points, normals)
@@ -584,12 +583,12 @@ class GaussianModel:
         new_xyz = torch.bmm(rots, samples.unsqueeze(-1)).squeeze(-1) + self.get_xyz[selected_pts_mask]
         
         # FIXME: GS scale
-        # new_scaling = self.scaling_inverse_activation(self.get_scaling[selected_pts_mask])
-        new_scaling = self.scaling_inverse_activation(self.get_scaling[selected_pts_mask] * scl_joint[selected_pts_mask])
+        new_scaling = self.scaling_inverse_activation(self.get_scaling[selected_pts_mask])
+        # new_scaling = self.scaling_inverse_activation(self.get_scaling[selected_pts_mask] * scl_joint[selected_pts_mask])
         
         # FIXME: GS rot
-        # new_rotation = self._rotation[selected_pts_mask]
-        new_rotation = matrix_to_quaternion(rot_joint[selected_pts_mask].reshape(-1,3,3)) * self._rotation[selected_pts_mask] 
+        new_rotation = self._rotation[selected_pts_mask]
+        # new_rotation = matrix_to_quaternion(rot_joint[selected_pts_mask].reshape(-1,3,3)) * self._rotation[selected_pts_mask] 
 
         new_features_dc = self._features_dc[selected_pts_mask]
         new_features_rest = self._features_rest[selected_pts_mask]
@@ -616,7 +615,6 @@ class GaussianModel:
         selected_pts_mask = torch.where(padded_grad >= grad_threshold, True, False)
         selected_pts_mask = torch.logical_and(selected_pts_mask,
                                               torch.max(self.get_scaling, dim=1).values > self.percent_dense*scene_extent)
-
         # for each gaussian point, find its nearest 2 points and return the distance
         self.kl_selected_pts_mask = self.cal_kl(kl_threshold) 
         
@@ -642,17 +640,17 @@ class GaussianModel:
         
         means =torch.zeros((stds.size(0), 3),device="cuda")
         samples = torch.normal(mean=means, std=stds)
-        
+
         # FIXME: density rots
         rots = build_rotation(self._rotation[selected_pts_mask]).repeat(N,1,1)
         # rots = build_rotation(self._rotation[selected_pts_mask])
         # rots = (rot_joint[selected_pts_mask].reshape(-1,3,3) @ rots).repeat(N,1,1)
-        
+
         new_xyz = torch.bmm(rots, samples.unsqueeze(-1)).squeeze(-1) + self.get_xyz[selected_pts_mask].repeat(N, 1)
         
         # FIXME: GS scale
         new_scaling = self.scaling_inverse_activation(self.get_scaling[selected_pts_mask].repeat(N,1) / (0.8*N))
-        #new_scaling = self.scaling_inverse_activation((scl_joint[selected_pts_mask] * self.get_scaling[selected_pts_mask] / (0.8*N)).repeat(N,1) )
+        # new_scaling = self.scaling_inverse_activation((scl_joint[selected_pts_mask] * self.get_scaling[selected_pts_mask] / (0.8*N)).repeat(N,1) )
 
         # FIXME: GS rot
         new_rotation = self._rotation[selected_pts_mask].repeat(N,1)

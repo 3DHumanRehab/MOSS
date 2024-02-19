@@ -140,32 +140,38 @@ if __name__ == "__main__":
     args.data_device='cuda'
     args.debug=False
     args.eval=True
-    args.data_name = 'olek_images0812'
 
-    if False:
-        args.exp_name=f'zju_mocap_refine/my_{args.data_name}_baseline'
-        args.iteration='1200'
-    else:
-        args.exp_name=f'monocap/my_{args.data_name}_monocap'
-        args.iteration='3000'
-    args.images='images'
-    args.model_path=f'output/{args.exp_name}'
-    args.motion_offset_flag=True
-    args.quiet=False
-    args.resolution=-1
-    args.sh_degree=3
-    args.skip_test=False
-    args.skip_train=True
-    args.smpl_type='smpl'
-    args.source_path=f'/HOME/HOME/data/MonoCap/mono_copy/{args.data_name}'
-    args.white_background=False
+    name_list = ['olek_images0812',"lan_images620_1300", "marc_images35000_36200","vlad_images1011"]
+    iteration_list = [2700,3200,2500,3200]
+    for iteration,data_name in zip(iteration_list,name_list):
+        args.data_name = data_name
+        if False:
+            args.exp_name=f'zju_mocap_refine/my_{args.data_name}_baseline'
+            args.iteration='1200'
+        else:
+            args.exp_name=f'/home/zjlab1/workspace/Caixiang/GauHuman_ablation/output/zju_mocap_refine/my_{args.data_name}_monocap'
+            args.iteration=iteration
+        args.images='images'
+        args.model_path=f'output/{args.exp_name}'
+        args.motion_offset_flag=True
+        args.quiet=False
+        args.resolution=-1
+        args.sh_degree=3
+        args.skip_test=False
+        args.skip_train=True
+        args.smpl_type='smpl'
+        args.source_path=f'/home/zjlab1/dataset/monocap/{args.data_name}'
+        args.white_background=False
 
-    print("=====================================")
-    print("Rendering " + args.model_path)
-    print(args)
-    print("=====================================")
+        print("=====================================")
+        print("Rendering " + args.model_path)
+        print(args)
+        print("=====================================")
 
-    # Initialize system state (RNG)
-    safe_state(args.quiet)
+        # Initialize system state (RNG)
+        safe_state(args.quiet)
 
-    render_sets(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test)
+        render_sets(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test)
+
+
+

@@ -358,7 +358,7 @@ if __name__ == "__main__":
     
     # name_list = ['olek_images0812']
     name_list = ['olek_images0812',"lan_images620_1300", "marc_images35000_36200","vlad_images1011"]
-    file_name = 'monocap.txt'
+    file_name = 'monocap_w_o_gaussion_rot_scale.txt'
     save_path = f'result/{file_name}'
     file = open(save_path, 'a')
 

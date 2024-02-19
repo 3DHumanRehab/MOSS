@@ -363,7 +363,7 @@ if __name__ == "__main__":
     #name_list = ['393','394'] 
     name_list = ['377','386','387','392','393','394'] 
     # file_name = 'w_o_autoregression.txt'
-    file_name = 'w_o_gaussion_density_control.txt'   # temp
+    file_name = 'w_o_gaussion_rot_scale.txt'   # temp
     save_path = f'result/{file_name}'
     file = open(save_path, 'a')
 
@@ -377,7 +377,7 @@ if __name__ == "__main__":
 
         tuner_params = nni.get_next_parameter()
         params = vars(merge_parameter(args, tuner_params))
-
+        
         safe_state(params['quiet'])
         # Start GUI server, configure and run training
         # network_gui.init(args.ip, args.port)
