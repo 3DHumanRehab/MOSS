@@ -78,7 +78,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         rgbs.append(rendering)
         rgbs_gt.append(gt)
         if not index%10:
-            gaussians.save_ply_with_mesh(os.path.join(ply_path, '{0:05d}'.format(index) + ".ply"),render_output["means3D"])
+            gaussians.save_ply(os.path.join(ply_path, '{0:05d}'.format(index) + ".ply"),render_output["means3D"])
             gaussians.save_tensor(os.path.join(depth_path, '{0:05d}'.format(index) + ".png"),render_output["render_depth"])
             gaussians.save_tensor(os.path.join(alpha_path, '{0:05d}'.format(index) + ".png"),render_output["render_alpha"])
 
@@ -150,7 +150,7 @@ if __name__ == "__main__":
     # iteration_list = [2700,3200,2700,3000,2500,2500]
     
     name_list = ['377']
-    log_name = 'normal_autoregression_and'
+    log_name = 'best_2'
     iteration_list = [2700]
     
     
@@ -161,7 +161,7 @@ if __name__ == "__main__":
             args.exp_name=f'/HOME/HOME/Caixiang/GauHuman_baseline/output/zju_mocap_refine/my_{args.data_name}_baseline'
             args.iteration='1200'
         else:
-            args.exp_name=f'/home/zjlab1/workspace/Caixiang/GauHuman_2/output/zju_mocap_refine/my_{args.data_name}_{log_name}'
+            args.exp_name=f'/home/zjlab1/workspace/Caixiang/GauHuman_ablation/output/zju_mocap_refine/my_{args.data_name}_{log_name}'
             args.iteration=iteration
         args.images='images'
         # args.model_path=f'output/{args.exp_name}'
@@ -185,5 +185,3 @@ if __name__ == "__main__":
         safe_state(args.quiet)
 
         render_sets(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test)
-
-

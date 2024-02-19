@@ -301,29 +301,13 @@ class GaussianModel:
             l.append('rot_{}'.format(i))
         return l
 
-    def save_ply_with_mesh(self, path, mesh):
+    def save_ply(self, path,point_cloud=None):
         mkdir_p(os.path.dirname(path))
-
-        xyz = mesh.detach().cpu().numpy()
-        normals = np.zeros_like(xyz)
-        f_dc = self._features_dc.detach().transpose(1, 2).flatten(start_dim=1).contiguous().cpu().numpy()
-        f_rest = self._features_rest.detach().transpose(1, 2).flatten(start_dim=1).contiguous().cpu().numpy()
-        opacities = self._opacity.detach().cpu().numpy()
-        scale = self._scaling.detach().cpu().numpy()
-        rotation = self._rotation.detach().cpu().numpy()
-
-        dtype_full = [(attribute, 'f4') for attribute in self.construct_list_of_attributes()]
-
-        elements = np.empty(xyz.shape[0], dtype=dtype_full)
-        attributes = np.concatenate((xyz, normals, f_dc, f_rest, opacities, scale, rotation), axis=1)
-        elements[:] = list(map(tuple, attributes))
-        el = PlyElement.describe(elements, 'vertex')
-        PlyData([el]).write(path)
-
-    def save_ply(self, path):
-        mkdir_p(os.path.dirname(path))
-
-        xyz = self._xyz.detach().cpu().numpy()
+        
+        if point_cloud=None:
+            xyz = self._xyz.detach().cpu().numpy()
+        else:
+            xyz = point_cloud.detach().cpu().numpy()
         normals = np.zeros_like(xyz)
         f_dc = self._features_dc.detach().transpose(1, 2).flatten(start_dim=1).contiguous().cpu().numpy()
         f_rest = self._features_rest.detach().transpose(1, 2).flatten(start_dim=1).contiguous().cpu().numpy()
@@ -569,33 +553,33 @@ class GaussianModel:
         
         
         # FIXME: normal_angle_mask
-        # normals = self.compute_normals_co3d(self._xyz)
-        # # mean_angle = compute_mean_angle(points, normals)
-        # # normal_angle_mask = mean_angle > angle_threshold
-        # angle_threshold = 0.1
-        # distance_threshold = 0.05
-        # normal_angle_mask = self.compute_angle_change_rate(self._xyz,normals,angle_threshold,distance_threshold)
-        # print("normal_angle_mask",normal_angle_mask.sum())
+        normals = self.compute_normals_co3d(self._xyz)
+        # mean_angle = compute_mean_angle(points, normals)
+        # normal_angle_mask = mean_angle > angle_threshold
+        angle_threshold = 0.1
+        distance_threshold = 0.05
+        normal_angle_mask = self.compute_angle_change_rate(self._xyz,normals,angle_threshold,distance_threshold)
+        print("normal_angle_mask",normal_angle_mask.sum())
         
         # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask 
         # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask | normal_angle_mask
-        # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & normal_angle_mask  # ME
-        selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask 
+        selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & normal_angle_mask  # ME
+        # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask 
         
         print("[kl clone]: ", (selected_pts_mask).sum().item())
 
         # FIXME: density get_scaling
-        # stds = self.get_scaling[selected_pts_mask]
-        stds = scl_joint[selected_pts_mask]*self.get_scaling[selected_pts_mask]
+        stds = self.get_scaling[selected_pts_mask]
+        # stds = scl_joint[selected_pts_mask]*self.get_scaling[selected_pts_mask]
  
         means = torch.zeros((stds.size(0), 3),device="cuda")
         samples = torch.normal(mean=means, std=stds)
         rots = build_rotation(self._rotation[selected_pts_mask])  # (*,3,3)
 
         # FIXME: density rots
-        # rots = rots
+        rots = rots
         # rots = rots @ rot_joint[selected_pts_mask].reshape(-1,3,3)
-        rots = rot_joint[selected_pts_mask].reshape(-1,3,3) @ rots  # ME
+        # rots = rot_joint[selected_pts_mask].reshape(-1,3,3) @ rots  # ME
         
         new_xyz = torch.bmm(rots, samples.unsqueeze(-1)).squeeze(-1) + self.get_xyz[selected_pts_mask]
         
@@ -652,16 +636,17 @@ class GaussianModel:
 
         print("[kl split]: ", (selected_pts_mask).sum().item())
 
+        # FIXME: density get_scaling
         stds = self.get_scaling[selected_pts_mask].repeat(N,1)
         # stds = (scl_joint[selected_pts_mask]*self.get_scaling[selected_pts_mask]).repeat(N,1)
         
         means =torch.zeros((stds.size(0), 3),device="cuda")
         samples = torch.normal(mean=means, std=stds)
         
-        # FIXME: Fisher
+        # FIXME: density rots
         rots = build_rotation(self._rotation[selected_pts_mask]).repeat(N,1,1)
-        #rots = build_rotation(self._rotation[selected_pts_mask])
-        #rots = (rot_joint[selected_pts_mask].reshape(-1,3,3) @ rots).repeat(N,1,1)
+        # rots = build_rotation(self._rotation[selected_pts_mask])
+        # rots = (rot_joint[selected_pts_mask].reshape(-1,3,3) @ rots).repeat(N,1,1)
         
         new_xyz = torch.bmm(rots, samples.unsqueeze(-1)).squeeze(-1) + self.get_xyz[selected_pts_mask].repeat(N, 1)
         

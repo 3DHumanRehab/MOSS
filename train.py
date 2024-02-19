@@ -356,10 +356,6 @@ if __name__ == "__main__":
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
-    parser.add_argument("--test1", type=float, default='0.1')
-    parser.add_argument("--test2", type=float, default='0.1')
-    parser.add_argument("--test3", type=float, default='0.1')
-    parser.add_argument("--test4", type=float, default='0.1')
     #name_list = ['393'] # 1200 iter  500 Density Control  100 iter/control
     
     #name_list = ['393','394'] 
@@ -367,14 +363,14 @@ if __name__ == "__main__":
     #name_list = ['393','394'] 
     name_list = ['377','386','387','392','393','394'] 
     # file_name = 'w_o_autoregression.txt'
-    file_name = 'w_o_normal.txt'   # temp
+    file_name = 'w_o_gaussion_density_control.txt'   # temp
     save_path = f'result/{file_name}'
     file = open(save_path, 'a')
 
     for name in name_list:
         print("Train on",name)
         file.write('\n'+"my_"+name+'\n')
-        sys_list = ['-s', f'/home/zjlab1/dataset/ZJU_monocap/my_{name}', '--eval', '--exp_name', f'zju_mocap_refine/my_{name}_{file_name[:-4]}', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '3600','--test1','0.1','--test2','0.1','--test3','0.1','--test4','0.1']
+        sys_list = ['-s', f'/home/zjlab1/dataset/ZJU_monocap/my_{name}', '--eval', '--exp_name', f'zju_mocap_refine/my_{name}_{file_name[:-4]}', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '3600']
         #args = parser.parse_args(sys_list)
         args, _ = parser.parse_known_args(sys_list)
         args.save_iterations.append(args.iterations)

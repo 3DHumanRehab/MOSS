@@ -77,7 +77,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             # rot_mats_no_root = rot_mats[:, 1:]
             # correct_Rs = torch.matmul(rot_mats_no_root.reshape(-1, 3, 3), pose_out['Rs'].reshape(-1, 3, 3)).reshape(-1, 23, 3, 3)
 
-            # Baseline  
+            # Baseline
             # pose_out = pc.pose_decoder(viewpoint_camera.smpl_param['poses'][:, 3:])  
             # correct_Rs = pose_out['Rs']
             
