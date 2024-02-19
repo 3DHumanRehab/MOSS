@@ -569,17 +569,18 @@ class GaussianModel:
         
         
         # FIXME: normal_angle_mask
-        normals = self.compute_normals_co3d(self._xyz)
-        # mean_angle = compute_mean_angle(points, normals)
-        # normal_angle_mask = mean_angle > angle_threshold
-        angle_threshold = 0.1
-        distance_threshold = 0.05
-        normal_angle_mask = self.compute_angle_change_rate(self._xyz,normals,angle_threshold,distance_threshold)
-        print("normal_angle_mask",normal_angle_mask.sum())
+        # normals = self.compute_normals_co3d(self._xyz)
+        # # mean_angle = compute_mean_angle(points, normals)
+        # # normal_angle_mask = mean_angle > angle_threshold
+        # angle_threshold = 0.1
+        # distance_threshold = 0.05
+        # normal_angle_mask = self.compute_angle_change_rate(self._xyz,normals,angle_threshold,distance_threshold)
+        # print("normal_angle_mask",normal_angle_mask.sum())
         
         # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask 
         # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask | normal_angle_mask
-        selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & normal_angle_mask  # ME
+        # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & normal_angle_mask  # ME
+        selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask 
         
         print("[kl clone]: ", (selected_pts_mask).sum().item())
 
@@ -644,8 +645,10 @@ class GaussianModel:
         # normal_angle_mask = self.compute_angle_change_rate(self._xyz,normals,angle_threshold,distance_threshold)
         # print("normal_angle_mask",normal_angle_mask.sum())
         # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & normal_angle_mask  # ME
-        
-        selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask
+        # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask | normal_angle_mask  # ME
+        selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask 
+
+        # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask
 
         print("[kl split]: ", (selected_pts_mask).sum().item())
 
@@ -665,11 +668,11 @@ class GaussianModel:
         # FIXME: GS scale
         new_scaling = self.scaling_inverse_activation(self.get_scaling[selected_pts_mask].repeat(N,1) / (0.8*N))
         #new_scaling = self.scaling_inverse_activation((scl_joint[selected_pts_mask] * self.get_scaling[selected_pts_mask] / (0.8*N)).repeat(N,1) )
-        
+
         # FIXME: GS rot
         new_rotation = self._rotation[selected_pts_mask].repeat(N,1)
         #new_rotation = (matrix_to_quaternion(rot_joint[selected_pts_mask].reshape(-1,3,3)) * self._rotation[selected_pts_mask]).repeat(N,1)
-        
+
         new_features_dc = self._features_dc[selected_pts_mask].repeat(N,1,1)
         new_features_rest = self._features_rest[selected_pts_mask].repeat(N,1,1)
         new_opacity = self._opacity[selected_pts_mask].repeat(N,1)
