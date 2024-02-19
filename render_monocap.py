@@ -23,6 +23,7 @@ from argparse import ArgumentParser
 from arguments import ModelParams, PipelineParams, get_combined_args
 from gaussian_renderer import GaussianModel
 
+
 from utils.image_utils import psnr
 from utils.loss_utils import ssim
 import lpips
@@ -74,7 +75,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         rgbs.append(rendering)
         rgbs_gt.append(gt)
         if not index%10:
-            gaussians.save_ply_with_mesh(os.path.join(ply_path, '{0:05d}'.format(index) + ".ply"),render_output["means3D"])
+            gaussians.save_ply(os.path.join(ply_path, '{0:05d}'.format(index) + ".ply"),render_output["means3D"])
             gaussians.save_tensor(os.path.join(depth_path, '{0:05d}'.format(index) + ".png"),render_output["render_depth"])
             gaussians.save_tensor(os.path.join(alpha_path, '{0:05d}'.format(index) + ".png"),render_output["render_alpha"])
 
@@ -141,6 +142,7 @@ if __name__ == "__main__":
     args.debug=False
     args.eval=True
 
+    log_name = 'baseline_monocap'
     name_list = ['olek_images0812',"lan_images620_1300", "marc_images35000_36200","vlad_images1011"]
     iteration_list = [2700,3200,2500,3200]
     for iteration,data_name in zip(iteration_list,name_list):
@@ -149,10 +151,12 @@ if __name__ == "__main__":
             args.exp_name=f'zju_mocap_refine/my_{args.data_name}_baseline'
             args.iteration='1200'
         else:
-            args.exp_name=f'/home/zjlab1/workspace/Caixiang/GauHuman_ablation/output/zju_mocap_refine/my_{args.data_name}_monocap'
-            args.iteration=iteration
+            # args.exp_name=f'/home/zjlab1/workspace/Caixiang/GauHuman_ablation/output/zju_mocap_refine/my_{args.data_name}_monocap'
+            args.exp_name=f'/home/zjlab1/workspace/Caixiang/GauHuman_baseline/output/zju_mocap_refine/my_{args.data_name}_{log_name}'
+            # args.iteration=iteration
+            args.iteration=1200
         args.images='images'
-        args.model_path=f'output/{args.exp_name}'
+        args.model_path=f'{args.exp_name}'
         args.motion_offset_flag=True
         args.quiet=False
         args.resolution=-1
@@ -172,6 +176,4 @@ if __name__ == "__main__":
         safe_state(args.quiet)
 
         render_sets(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test)
-
-
 

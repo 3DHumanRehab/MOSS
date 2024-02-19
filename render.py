@@ -153,7 +153,6 @@ if __name__ == "__main__":
     log_name = 'best_2'
     iteration_list = [2700]
     
-    
     for iteration,data_name in zip(iteration_list,name_list):
         args.data_name = data_name
         if False:

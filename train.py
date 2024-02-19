@@ -160,7 +160,9 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # loss = Ll1 + 0.05* (1.0 - ssim_loss) +  0.1* lpips_loss
         # loss = Ll1 + 0.1 * mask_loss +  0.01* (1.0 - ssim_loss)
         # loss = Ll1 + 0.5 * mask_loss +  0.2* (1.0 - ssim_loss) +  0.5* lpips_loss  + 0.3 * s3im_loss
-        loss = Ll1 + 0.5 * mask_loss +  0.2* (1.0 - ssim_loss) +  0.5* lpips_loss +  0.06 * nll_loss + 0.3 * s3im_loss
+        loss = Ll1 + 0.1 * mask_loss +  0.01* (1.0 - ssim_loss) +  0.01* lpips_loss +  0.01 * nll_loss+ 0.01 * s3im_loss
+        
+        # loss = Ll1 + 0.5 * mask_loss +  0.2* (1.0 - ssim_loss) +  0.5* lpips_loss +  0.06 * nll_loss + 0.3 * s3im_loss
         # loss = Ll1 + 0.5 * mask_loss + float(test1) * (1.0 - ssim_loss) + float(test2) * lpips_loss + float(test3) * nll_loss +float(test4) * s3im_loss  # TODO:
 
 
