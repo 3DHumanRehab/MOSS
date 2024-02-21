@@ -10,7 +10,7 @@
 #
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+# os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 import cv2
 import time
 import copy
@@ -175,7 +175,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # loss = Ll1 + 0.01* lpips_loss
         # loss = Ll1 + 0.3 * mask_loss
         # loss = Ll1 + 0.01* (1.0 - ssim_loss) +  0.01* lpips_loss
-        loss = Ll1 + 0.01* (1.0 - ssim_loss) +  0.05* lpips_loss
+        loss = Ll1 + 0.01* (1.0 - ssim_loss) +  0.4* lpips_loss
         # loss = Ll1 + 0.1 * mask_loss +  0.01* (1.0 - ssim_loss)
         # loss = Ll1 + 0.5 * mask_loss +  0.2* (1.0 - ssim_loss) +  0.5* lpips_loss  + 0.3 * s3im_loss
         # loss = Ll1 + 0.1 * mask_loss +  0.01* (1.0 - ssim_loss) +  0.01* lpips_loss +  0.01 * nll_loss+ 0.01 * s3im_loss
@@ -369,8 +369,8 @@ if __name__ == "__main__":
     parser.add_argument('--port', type=int, default=6009)
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
-    parser.add_argument("--test_iterations", nargs="+", type=int, default=[800])
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[800])
+    parser.add_argument("--test_iterations", nargs="+", type=int, default=[1500])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[1500])
     # parser.add_argument("--test_iterations", nargs="+", type=int, default=[2_200,2500,2700, 3_000,3200,3400,3600]) # TODO:
     # parser.add_argument("--save_iterations", nargs="+", type=int, default=[2_200,2500,2700, 3_000,3200,3400,3600])
     parser.add_argument("--quiet", action="store_true")
@@ -383,14 +383,14 @@ if __name__ == "__main__":
     # name_list = ['377','386','387','392','393','394']
     name_list = ['377']
     # file_name = 'w_o_autoregression.txt'
-    file_name = 'autoregression_crossattention.txt'   # temp
+    file_name = 'w_o_normal.txt'   # temp
     save_path = f'result/{file_name}'
     file = open(save_path, 'a')
 
     for name in name_list:
         print("Train on",name)
         file.write('\n'+"my_"+name+'\n')
-        sys_list = ['-s', f'/home/zjlab1/dataset/ZJU_monocap/my_{name}', '--eval', '--exp_name', f'zju_mocap_refine/my_{name}_{file_name[:-4]}', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '800']
+        sys_list = ['-s', f'/home/zjlab1/dataset/ZJU_monocap/my_{name}', '--eval', '--exp_name', f'zju_mocap_refine/my_{name}_{file_name[:-4]}', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '1500']
         #args = parser.parse_args(sys_list)
         args, _ = parser.parse_known_args(sys_list)
         args.save_iterations.append(args.iterations)
