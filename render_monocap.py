@@ -141,13 +141,13 @@ if __name__ == "__main__":
     args.debug=False
     args.eval=True
 
-    # log_name = 'baseline_monocap'
     name_list = ['olek_images0812',"lan_images620_1300", "marc_images35000_36200","vlad_images1011"]
-    # iteration_list = [2700,3200,2500,3200]
+    log_name_list = ['monocap_w_o_all']
+    iteration_list_list = [[800,800,800,800]]
     
     
-    log_name_list = ['monocap_w_o_gaussian_operate','monocap_w_o_gaussion_rot_scale','monocap_w_o_normal','monocap_w_o_gaussion_density_control','monocap_w_o_all'] 
-    iteration_list_list = [[1200,1200,1200,1200,1200],[2700,3000,2500,3200,2850],[3200,2500,2500,3200,2850],[2500,3000,2500,3200,2800],[1200,1200,1200,1200,1200]]
+    # log_name_list = ['monocap_w_o_gaussian_operate','monocap_w_o_gaussion_rot_scale','monocap_w_o_normal','monocap_w_o_gaussion_density_control','monocap_w_o_all'] 
+    # iteration_list_list = [[1200,1200,1200,1200,1200],[2700,3000,2500,3200,2850],[3200,2500,2500,3200,2850],[2500,3000,2500,3200,2800],[1200,1200,1200,1200,1200]]
 
     
     for log_name,iteration_list in zip(log_name_list,iteration_list_list):

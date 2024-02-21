@@ -45,7 +45,8 @@ for idx,data_name in tqdm.tqdm(enumerate(name_list)):
             ax.axis('off')  # Hide axes
             ax.set_title(log_name.replace('monocap_w_o','w/o'), fontsize=10)  # Number below the image
             idx +=1
-        plt.tight_layout()
+        # plt.tight_layout()
+        plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05, wspace=0, hspace=0.2)
         # print(imgs.shape)
         # cv2.imwrite(save_path+str(n)+'.jpg',imgs)
         plt.savefig(save_path+str(n)+'.jpg',dpi=900)
