@@ -123,6 +123,22 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         else:
             lbs_weights += render_pkg['lbs_weights']
 
+
+
+
+        RT = torch.cat([torch.tensor(viewpoint_cam.R.transpose()), torch.tensor(viewpoint_cam.T).reshape(3,1)], -1)[None, None].cuda()
+        xyz = torch.repeat_interleave(torch.tensor(viewpoint_cam.world_vertex)[None, None], repeats=RT.shape[1], dim=1) #[bs, view_num, , 3]
+        xyz = torch.matmul(RT[:, :, None, :, :3].float(), xyz[..., None].float()) + RT[:, :, None, :, 3:].float()
+        xyz = torch.matmul(torch.tensor(viewpoint_cam.K)[None, None][:, :, None].float().cuda(), xyz)[..., 0]
+        xy = xyz[..., :2] / (xyz[..., 2:] + 1e-5)
+        src_uv = xy.view(-1, *xy.shape[2:])
+
+        test_image = viewpoint_cam.original_image.clone().permute(1,2,0)
+        test_image[src_uv[0,:,1].type(torch.LongTensor), src_uv[0,:,0].type(torch.LongTensor)] = 1
+        import imageio
+        imageio.imwrite(f'vertex_img.png', (255*test_image).cpu().numpy().astype(np.uint8))
+
+
         # Loss
         gt_image = viewpoint_cam.original_image.cuda()
         bkgd_mask = viewpoint_cam.bkgd_mask.cuda()
@@ -143,13 +159,13 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         
         
         # FIXME: Loss Fisher
-        nll_loss = s3im_loss
+        # nll_loss = s3im_loss
         
-        # data = render_pkg['pose_out']
-        # pred_F,pred_U,pred_S,pred_V,target_R = data['Rs'],data['pose_U'],data['pose_S'],data['pose_V'],data['target_R']
-        # joint_F += pred_F
-        # nll_loss = matrix_fisher_nll(pred_F,pred_U,pred_S,pred_V,target_R)
-        # nll_loss = nll_loss.mean() 
+        data = render_pkg['pose_out']
+        pred_F,pred_U,pred_S,pred_V,target_R = data['Rs'],data['pose_U'],data['pose_S'],data['pose_V'],data['target_R']
+        joint_F += pred_F
+        nll_loss = matrix_fisher_nll(pred_F,pred_U,pred_S,pred_V,target_R)
+        nll_loss = nll_loss.mean() 
 
 
         # FIXME: Loss Fisher
@@ -365,7 +381,7 @@ if __name__ == "__main__":
     #name_list = ['393','394'] 
     name_list = ['377','386','387','392','393','394'] 
     # file_name = 'w_o_autoregression.txt'
-    file_name = 'w_o_gaussion_rot_scale.txt'   # temp
+    file_name = 'temp.txt'   # temp
     save_path = f'result/{file_name}'
     file = open(save_path, 'a')
 

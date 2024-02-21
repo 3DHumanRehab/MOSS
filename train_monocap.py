@@ -8,9 +8,10 @@
 #
 # For inquiries contact  george.drettakis@inria.fr
 #
+ 
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = '1'
+# os.environ["CUDA_VISIBLE_DEVICES"] = '1'
 import cv2
 import time
 import copy
@@ -79,6 +80,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     render_pkg = None
     viewpoint_cam = None
     joint_F = torch.zeros(23,3,3).to('cuda')
+
     lbs_weights = None
     gaussians.origin_rotation = copy.deepcopy(gaussians._rotation).detach()
     gaussians.origin_scaling = copy.deepcopy(gaussians._scaling).detach()
@@ -141,7 +143,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         s3im_loss = s3im_fun(img_pred, img_gt)
         
-        
         # FIXME: Loss Fisher
         nll_loss = s3im_loss
         
@@ -151,19 +152,14 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # nll_loss = matrix_fisher_nll(pred_F,pred_U,pred_S,pred_V,target_R)
         # nll_loss = nll_loss.mean() 
 
-
         # FIXME: Loss Fisher
         # loss = Ll1 + 0.1 * mask_loss +  0.01* (1.0 - ssim_loss) +  0.01* lpips_loss
         # loss = Ll1 + 0.1 * mask_loss + 0.01* lpips_loss
-        # loss = Ll1 + 0.1 * mask_loss 
-        # loss = Ll1 + 0.01* lpips_loss
-        # loss = Ll1 + 0.05* (1.0 - ssim_loss) +  0.1* lpips_loss
-        # loss = Ll1 + 0.1 * mask_loss +  0.01* (1.0 - ssim_loss)
-        # loss = Ll1 + 0.5 * mask_loss +  0.2* (1.0 - ssim_loss) +  0.5* lpips_loss  + 0.3 * s3im_loss
         # loss = Ll1 + 0.5 * mask_loss +  0.2* (1.0 - ssim_loss) +  0.5* lpips_loss +  0.06 * nll_loss + 0.3 * s3im_loss
-        # loss = Ll1 + 0.1 * mask_loss +  0.01* (1.0 - ssim_loss) +  0.01* lpips_loss +  0.01 * nll_loss+ 0.01 * s3im_loss
-        loss = Ll1 + 0.1 * mask_loss +  0.01* (1.0 - ssim_loss) +  0.01* lpips_loss 
-        # loss = Ll1 + 0.5 * mask_loss + float(test1) * (1.0 - ssim_loss) + float(test2) * lpips_loss + float(test3) * nll_loss +float(test4) * s3im_loss  # TODO:
+        loss = Ll1 + 0.5 * mask_loss +  0.2* (1.0 - ssim_loss) +  0.2* lpips_loss +  0.06 * nll_loss + 0.1 * s3im_loss
+        # loss = Ll1 + 0.5 * mask_loss +  0.01* (1.0 - ssim_loss) +  0.01* lpips_loss +  0.01 * nll_loss+ 0.01 * s3im_loss
+        # loss = Ll1 + 0.5 * mask_loss +  0.1* (1.0 - ssim_loss) +  0.1* lpips_loss +  0.01 * nll_loss+ 0.1 * s3im_loss
+        # loss = Ll1 + 0.1 * mask_loss +  0.01* (1.0 - ssim_loss) +  0.01* lpips_loss 
         # nni.report_intermediate_result(loss.item())
         loss.backward()
 
@@ -349,8 +345,8 @@ if __name__ == "__main__":
     parser.add_argument('--port', type=int, default=6009)
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
-    parser.add_argument("--test_iterations", nargs="+", type=int, default=[800])
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[800])
+    parser.add_argument("--test_iterations", nargs="+", type=int, default=[2_200])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[2_200])
     # parser.add_argument("--test_iterations", nargs="+", type=int, default=[2_200,2500,2700, 3_000,3200,3400,3600]) # TODO:
     # parser.add_argument("--save_iterations", nargs="+", type=int, default=[2_200,2500,2700, 3_000,3200,3400,3600])
     parser.add_argument("--quiet", action="store_true")
@@ -361,14 +357,15 @@ if __name__ == "__main__":
     # name_list = ['olek_images0812']
     name_list = ['olek_images0812',"lan_images620_1300", "marc_images35000_36200","vlad_images1011"]
     # file_name = 'monocap_w_o_gaussian_operate.txt'
-    file_name = 'monocap_w_o_all.txt'
+    file_name = 'monocap_w_o_gaussion_rot_scale.txt'
+    # file_name = 'monocap_w_o_gaussion_density_control.txt'
     save_path = f'result/{file_name}'
     file = open(save_path, 'a')
 
     for name in name_list:
         print("Train on",name)
         file.write('\n'+"my_"+name+'\n')
-        sys_list = ['-s', f'/home/zjlab1/dataset/monocap/{name}', '--eval', '--exp_name', f'zju_mocap_refine/my_{name}_{file_name[:-4]}', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '800']
+        sys_list = ['-s', f'/home/zjlab1/dataset/monocap/{name}', '--eval', '--exp_name', f'zju_mocap_refine/my_{name}_{file_name[:-4]}', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '3600']
         #args = parser.parse_args(sys_list)
         args, _ = parser.parse_known_args(sys_list)
         args.save_iterations.append(args.iterations)

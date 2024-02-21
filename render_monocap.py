@@ -142,8 +142,8 @@ if __name__ == "__main__":
     args.eval=True
 
     name_list = ['olek_images0812',"lan_images620_1300", "marc_images35000_36200","vlad_images1011"]
-    log_name_list = ['monocap_w_o_all']
-    iteration_list_list = [[800,800,800,800]]
+    log_name_list = ['monocap_w_o_gaussion_rot_scale']
+    iteration_list_list = [[2200,3400,3200,2700]]
     
     
     # log_name_list = ['monocap_w_o_gaussian_operate','monocap_w_o_gaussion_rot_scale','monocap_w_o_normal','monocap_w_o_gaussion_density_control','monocap_w_o_all'] 

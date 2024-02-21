@@ -437,6 +437,7 @@ def readCamerasMonoCapdata(path, output_view, white_background, image_scaling=1.
             smpl_param['Th'] = Th #np.array(params["Th"]).astype(np.float32)
             xyz, _ = smpl_model(smpl_param['poses'], smpl_param['shapes'].reshape(-1))
             xyz = (np.matmul(xyz, smpl_param['R'].transpose()) + smpl_param['Th']).astype(np.float32)
+            smpl_param['pose_rotmats'] = batch_rodrigues(torch.tensor(smpl_param['poses'][0]).contiguous().view(-1, 3))[1:]
 
             # obtain the original bounds for point sampling
             min_xyz = np.min(xyz, axis=0)
@@ -702,13 +703,7 @@ def readCamerasZJUMoCapRefine(path, output_view, white_background, image_scaling
             smpl_param['shapes'] = smpl_param['shapes'].astype(np.float32)
             smpl_param['poses'] = smpl_param['poses'].astype(np.float32)
             
-            original_str = f"{i}"
-            json_path = path+"/easymocap/output-smpl-3d/smpl/"+original_str.zfill(6)+'.json'
-            with open(json_path, 'r') as file:
-                data = json.load(file)
-            smpl_param['pose_rotmats'] = batch_rodrigues(torch.tensor(data['annots'][0]['poses'][0]).contiguous().view(-1, 3)).view(23, 3, 3)
-            
-            # smpl_param['pose_rotmats'] = batch_rodrigues(torch.tensor(smpl_param['poses']).contiguous().view(-1, 3)).view(24, 3, 3)
+            smpl_param['pose_rotmats'] = batch_rodrigues(torch.tensor(smpl_param['poses'][0]).contiguous().view(-1, 3))[1:]
 
             # obtain the original bounds for point sampling
             min_xyz = np.min(xyz, axis=0)
