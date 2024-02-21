@@ -4,10 +4,19 @@ import matplotlib.pyplot as plt
 import numpy as np
 import cv2
 import tqdm
-name_list = ['olek_images0812',"lan_images620_1300", "marc_images35000_36200","vlad_images1011"]
+# name_list = ['393','394','387']
 
-log_name_list = ['monocap','monocap_w_o_gaussion_rot_scale','monocap_w_o_gaussion_density_control','monocap_w_o_normal','monocap_w_o_gaussian_operate','monocap_w_o_all']
-iteration_list_list = [[2700,3200,2500,3200],[2200,3400,3200,2700],[3600,3400,3600,2200],[3200,2500,2500,3200],[1200,1200,1200,1200],[800,800,800,800]]
+# log_name_list = ['monocap','monocap_w_o_gaussion_rot_scale','monocap_w_o_gaussion_density_control','monocap_w_o_normal','monocap_w_o_gaussian_operate','monocap_w_o_all']
+# iteration_list_list = [[2700,3200,2500,3200],[2200,3400,3200,2700],[3600,3400,3600,2200],[3200,2500,2500,3200],[1200,1200,1200,1200],[800,800,800,800]]
+
+
+log_name_list = ['best_2']
+# name_list = ['377','386','387','392','393','394'] 
+# iteration_list_list = [[2200,3600,2500,3600,3400,2700]] 
+name_list = ['386','387','392','393','394'] 
+iteration_list_list = [[3600,2500,3600,3400,2700]] 
+
+
 
 for idx,data_name in tqdm.tqdm(enumerate(name_list)):
     pred_list = []
@@ -21,10 +30,10 @@ for idx,data_name in tqdm.tqdm(enumerate(name_list)):
         print(exp_name)
         if add_gt:
             gt_exp_name = exp_name.replace('renders','gt')
-            renders_list = glob.glob(gt_exp_name)
+            renders_list = glob.glob(gt_exp_name)[40:140]
             pred_list.append(renders_list)
             add_gt = False
-        renders_list = glob.glob(exp_name)
+        renders_list = glob.glob(exp_name)[40:140]
         pred_list.append(renders_list)
 
     txt_length = len(pred_list)
@@ -32,9 +41,9 @@ for idx,data_name in tqdm.tqdm(enumerate(name_list)):
         bound_mask = pred_list[0][n].replace('renders','depth')
         bound_mask = cv2.imread(bound_mask)
         img = cv2.cvtColor(bound_mask, cv2.COLOR_BGR2GRAY)
-        _, bound_mask = cv2.threshold(img, 23, 255, cv2.THRESH_BINARY)
+        _, bound_mask = cv2.threshold(img, 1, 255, cv2.THRESH_BINARY)
         x, y, w, h = cv2.boundingRect(bound_mask)
-        images = [cv2.imread(pred_list[i][n])[ y:y + h, x:x + w,:][:,:,::-1] for i in range(0, txt_length)]
+        images = [cv2.imread(pred_list[i][n])[ y-5:y + h+5, x-5:x + w+5,:][:,:,::-1] for i in range(0, txt_length)]
         # import pdb
         # pdb.set_trace()
         # imgs = np.concatenate(images,axis=1)

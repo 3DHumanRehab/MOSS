@@ -77,10 +77,10 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
 
         rgbs.append(rendering)
         rgbs_gt.append(gt)
-        if not index%10:
-            gaussians.save_ply(os.path.join(ply_path, '{0:05d}'.format(index) + ".ply"),render_output["means3D"])
-            gaussians.save_tensor(os.path.join(depth_path, '{0:05d}'.format(index) + ".png"),render_output["render_depth"])
-            gaussians.save_tensor(os.path.join(alpha_path, '{0:05d}'.format(index) + ".png"),render_output["render_alpha"])
+        # if not index%10:
+        gaussians.save_ply(os.path.join(ply_path, '{0:05d}'.format(index) + ".ply"),render_output["means3D"])
+        gaussians.save_tensor(os.path.join(depth_path, '{0:05d}'.format(index) + ".png"),render_output["render_depth"])
+        gaussians.save_tensor(os.path.join(alpha_path, '{0:05d}'.format(index) + ".png"),render_output["render_alpha"])
 
 
     # Calculate elapsed time
@@ -145,13 +145,13 @@ if __name__ == "__main__":
     args.debug=False
     args.eval=True
 
-    # name_list = ['377','386','387','392','393','394']
     # log_name = 'normal_autoregression_and'
     # iteration_list = [2700,3200,2700,3000,2500,2500]
     
-    name_list = ['377']
+    # name_list = ['377']
+    name_list = ['377','386','387','392','393','394']
     log_name = 'best_2'
-    iteration_list = [2700]
+    iteration_list = [2200,3600,2500,3600,3400,2700]
     
     for iteration,data_name in zip(iteration_list,name_list):
         args.data_name = data_name
