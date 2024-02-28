@@ -567,7 +567,7 @@ class GaussianModel:
         
         print("[kl clone]: ", (selected_pts_mask).sum().item())
 
-        if True:
+        if False:
             '''monocap_w_o_gaussion_option'''
             # FIXME: density get_scaling
             stds = self.get_scaling[selected_pts_mask]
@@ -591,7 +591,7 @@ class GaussianModel:
             # FIXME: GS rot
             new_rotation = self._rotation[selected_pts_mask]
             # new_rotation = matrix_to_quaternion(rot_joint[selected_pts_mask].reshape(-1,3,3)) * self._rotation[selected_pts_mask] 
-        elif True:
+        elif False:
             '''monocap_w_o_gaussion_rot_scale'''
             # FIXME: density get_scaling
             # stds = self.get_scaling[selected_pts_mask]
@@ -616,7 +616,7 @@ class GaussianModel:
             new_rotation = self._rotation[selected_pts_mask]
             # new_rotation = matrix_to_quaternion(rot_joint[selected_pts_mask].reshape(-1,3,3)) * self._rotation[selected_pts_mask] 
 
-        else:
+        elif False:
             ''' monocap_w_o_gaussion_density_control'''
             # FIXME: density get_scaling
             stds = self.get_scaling[selected_pts_mask]
@@ -640,7 +640,32 @@ class GaussianModel:
             # FIXME: GS rot
             new_rotation = self._rotation[selected_pts_mask]
             # new_rotation = matrix_to_quaternion(rot_joint[selected_pts_mask].reshape(-1,3,3)) * self._rotation[selected_pts_mask] 
-
+        else:
+            ''' all'''
+            # FIXME: density get_scaling
+            # stds = self.get_scaling[selected_pts_mask]
+            stds = scl_joint[selected_pts_mask]*self.get_scaling[selected_pts_mask]
+    
+            means = torch.zeros((stds.size(0), 3),device="cuda")
+            samples = torch.normal(mean=means, std=stds)
+            rots = build_rotation(self._rotation[selected_pts_mask])  # (*,3,3)
+            
+            # FIXME: density rots
+            # rots = rots
+            # rots = rots @ rot_joint[selected_pts_mask].reshape(-1,3,3)
+            rots = rot_joint[selected_pts_mask].reshape(-1,3,3) @ rots  # ME
+            
+            new_xyz = torch.bmm(rots, samples.unsqueeze(-1)).squeeze(-1) + self.get_xyz[selected_pts_mask]
+            new_xyz = self.get_xyz[selected_pts_mask]
+            
+            # FIXME: GS scale
+            # new_scaling = self.scaling_inverse_activation(self.get_scaling[selected_pts_mask])
+            new_scaling = self.scaling_inverse_activation(self.get_scaling[selected_pts_mask] * scl_joint[selected_pts_mask])
+            
+            # FIXME: GS rot
+            # new_rotation = self._rotation[selected_pts_mask]
+            new_rotation = matrix_to_quaternion(rot_joint[selected_pts_mask].reshape(-1,3,3)) * self._rotation[selected_pts_mask] 
+        
         new_features_dc = self._features_dc[selected_pts_mask]
         new_features_rest = self._features_rest[selected_pts_mask]
         new_opacity = self._opacity[selected_pts_mask]

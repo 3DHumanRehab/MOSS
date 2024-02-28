@@ -9,12 +9,17 @@ screenshots
 assets/
 *.png
 *.jpg
+*.pdf
 *.obj
 *.pth
 *.pt
 *.ply
 *.json
+*.tar
 *.mtl
+temp/
 data/
+methods/
+vision/
 output/
 my_392/

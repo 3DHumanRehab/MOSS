@@ -51,6 +51,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     for index, view in enumerate(tqdm(views, desc="Rendering progress")):
         gt = view.original_image[0:3, :, :].cuda()
         bound_mask = view.bound_mask
+        print(view.pose_id)
         transforms, translation = smpl_rot[name][view.pose_id]['transforms'], smpl_rot[name][view.pose_id]['translation']
         
         # new_view = views[1]
@@ -148,39 +149,43 @@ if __name__ == "__main__":
     # log_name = 'normal_autoregression_and'
     # iteration_list = [2700,3200,2700,3000,2500,2500]
     
-    # name_list = ['377']
-    name_list = ['377','386','387','392','393','394']
-    log_name = 'best_2'
-    iteration_list = [2200,3600,2500,3600,3400,2700]
-    
-    for iteration,data_name in zip(iteration_list,name_list):
-        args.data_name = data_name
-        if False:
-            # args.exp_name=f'zju_mocap_refine/my_{args.data_name}_baseline'
-            args.exp_name=f'/HOME/HOME/Caixiang/GauHuman_baseline/output/zju_mocap_refine/my_{args.data_name}_baseline'
-            args.iteration='1200'
-        else:
-            args.exp_name=f'/home/zjlab1/workspace/Caixiang/GauHuman_ablation/output/zju_mocap_refine/my_{args.data_name}_{log_name}'
-            args.iteration=iteration
-        args.images='images'
-        # args.model_path=f'output/{args.exp_name}'
-        args.model_path=f'{args.exp_name}'
-        args.motion_offset_flag=True
-        args.quiet=False
-        args.resolution=-1
-        args.sh_degree=3
-        args.skip_test=False
-        args.skip_train=True
-        args.smpl_type='smpl'
-        args.source_path=f'/home/zjlab1/dataset/ZJU_monocap/my_{args.data_name}'
-        args.white_background=False
+    name_list = ['377']
+    # name_list = ['377','386','387','392','393','394']
+    # log_name_list = ['MLP','autoregression_crossattention','w_o_normal','w_o_gaussion_density_control','w_o_gaussion_rot_scale','best_2']
+    # iteration_list_list = [[1200],[800],[1500],[2700],[2700],[2700]]
+    # log_name_list = ['MLP','autoregression_crossattention','w_o_normal','w_o_gaussion_density_control','w_o_gaussion_rot_scale','best_2']
+    # iteration_list_list = [[1200],[800],[1500],[2700],[2700],[2700]]
+    log_name_list = ['w_o_gaussion_density_control']
+    iteration_list_list = [[2500]]
+    for log_name,iteration_list in zip(log_name_list,iteration_list_list):
+        for iteration,data_name in zip(iteration_list,name_list):
+            args.data_name = data_name
+            if False:
+                args.exp_name=f'zju_mocap_refine/my_{args.data_name}_baseline'
+                args.iteration='1200'
+            else:
+                # args.exp_name=f'/home/zjlab1/workspace/Caixiang/GauHuman_baseline/output/zju_mocap_refine/my_{args.data_name}_{log_name}'
+                args.exp_name=f'/home/zjlab1/workspace/Caixiang/GauHuman_ablation/output/zju_mocap_refine/my_{args.data_name}_{log_name}'
+                args.iteration=iteration
+                # args.iteration=1200
+            args.images='images'
+            args.model_path=f'{args.exp_name}'
+            args.motion_offset_flag=True
+            args.quiet=False
+            args.resolution=-1
+            args.sh_degree=3
+            args.skip_test=False
+            args.skip_train=True
+            args.smpl_type='smpl'
+            args.source_path=f'/home/zjlab1/dataset/ZJU_monocap/my_{args.data_name}'
+            args.white_background=False
 
-        print("=====================================")
-        print("Rendering " + args.model_path)
-        print(args)
-        print("=====================================")
+            print("=====================================")
+            print("Rendering " + args.model_path)
+            print(args)
+            print("=====================================")
 
-        # Initialize system state (RNG)
-        safe_state(args.quiet)
+            # Initialize system state (RNG)
+            safe_state(args.quiet)
 
-        render_sets(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test)
+            render_sets(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test)
