@@ -74,15 +74,15 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         # Calculate elapsed time
         elapsed_time += end_time - start_time
 
-        rendering.permute(1,2,0)[bound_mask[0]==0] = 0 if background.sum().item() == 0 else 1
-
+        # rendering.permute(1,2,0)[bound_mask[0]==0] = 0 if background.sum().item() == 0 else 1
+        # if index==72:
+        #     print(1)
         rgbs.append(rendering)
         rgbs_gt.append(gt)
         # if not index%10:
         gaussians.save_ply(os.path.join(ply_path, '{0:05d}'.format(index) + ".ply"),render_output["means3D"])
         gaussians.save_tensor(os.path.join(depth_path, '{0:05d}'.format(index) + ".png"),render_output["render_depth"])
         gaussians.save_tensor(os.path.join(alpha_path, '{0:05d}'.format(index) + ".png"),render_output["render_alpha"])
-
 
     # Calculate elapsed time
     print("Elapsed time: ", elapsed_time, " FPS: ", len(views)/elapsed_time) 
@@ -148,15 +148,17 @@ if __name__ == "__main__":
 
     # log_name = 'normal_autoregression_and'
     # iteration_list = [2700,3200,2700,3000,2500,2500]
-    
-    name_list = ['377']
-    # name_list = ['377','386','387','392','393','394']
+    # iteration_list_list = [[2700,3600,2500,3600,3400,2700][0]]
+    iteration_list_list = [[2200,2200,2200,2200,2200,3400]]
+    # name_list = ['377']
+    name_list = ['377','386','387','392','393','394']
+    log_name_list=['temp']
     # log_name_list = ['MLP','autoregression_crossattention','w_o_normal','w_o_gaussion_density_control','w_o_gaussion_rot_scale','best_2']
     # iteration_list_list = [[1200],[800],[1500],[2700],[2700],[2700]]
     # log_name_list = ['MLP','autoregression_crossattention','w_o_normal','w_o_gaussion_density_control','w_o_gaussion_rot_scale','best_2']
     # iteration_list_list = [[1200],[800],[1500],[2700],[2700],[2700]]
-    log_name_list = ['w_o_gaussion_density_control']
-    iteration_list_list = [[2500]]
+    # log_name_list = ['w_o_gaussion_density_control']
+    # iteration_list_list = [[2500]]
     for log_name,iteration_list in zip(log_name_list,iteration_list_list):
         for iteration,data_name in zip(iteration_list,name_list):
             args.data_name = data_name

@@ -14,12 +14,16 @@ assets/
 *.pth
 *.pt
 *.ply
+*.gif
 *.json
 *.tar
 *.mtl
+*.tar
+*.zip
 temp/
 data/
 methods/
 vision/
 output/
+output2/
 my_392/

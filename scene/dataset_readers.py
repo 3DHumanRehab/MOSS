@@ -318,9 +318,10 @@ def readCamerasMonoCapdata(path, output_view, white_background, image_scaling=1.
         pose_interval = 5
         pose_num = 100
     elif split == 'test':
-        pose_interval = 30
-        pose_num = 17 
-
+        # pose_interval = 30
+        # pose_num = 17 
+        pose_interval = 5
+        pose_num = 100
     annot_path = os.path.join(path, 'annots.npy')
     annots = np.load(annot_path, allow_pickle=True).item()
     cam = annots['cams']
@@ -561,9 +562,10 @@ def readCamerasZJUMoCapRefine(path, output_view, white_background, image_scaling
             pose_num = 100
         elif split == 'test':
             pose_start = 0
-            pose_interval = 30
-            pose_num = 17
-
+            # pose_interval = 30
+            # pose_num = 17
+            pose_interval = 5
+            pose_num = 100
     else:
         print("============================")
         print("debug...")
@@ -585,16 +587,28 @@ def readCamerasZJUMoCapRefine(path, output_view, white_background, image_scaling
     ann_file = os.path.join(path, 'annots.npy')
     annots = np.load(ann_file, allow_pickle=True).item()
     cams = annots['cams']
+    
+    # ims = np.array([
+    #     np.array(ims_data['ims'])[output_view]
+    #     for ims_data in annots['ims'][pose_start:pose_start + pose_num * pose_interval][::pose_interval]
+    # ])
+
+    # cam_inds = np.array([
+    #     np.arange(len(ims_data['ims']))[output_view]
+    #     for ims_data in annots['ims'][pose_start:pose_start + pose_num * pose_interval][::pose_interval]
+    # ])
+    
+    output_view = [0]
     ims = np.array([
         np.array(ims_data['ims'])[output_view]
-        for ims_data in annots['ims'][pose_start:pose_start + pose_num * pose_interval][::pose_interval]
+        for ims_data in annots['ims']
     ])
 
     cam_inds = np.array([
         np.arange(len(ims_data['ims']))[output_view]
-        for ims_data in annots['ims'][pose_start:pose_start + pose_num * pose_interval][::pose_interval]
+        for ims_data in annots['ims']
     ])
-    
+
     # Data aug
     # if split == 'train' :
     #     mask = np.random.rand(cam_inds.shape[0],1)<0.05
@@ -606,7 +620,6 @@ def readCamerasZJUMoCapRefine(path, output_view, white_background, image_scaling
     if 'CoreView_313' in path or 'CoreView_315' in path:
         for i in range(ims.shape[0]):
             ims[i] = [x.split('/')[0] + '/' + x.split('/')[1].split('_')[4] + '.jpg' for x in ims[i]]
-
 
     smpl_model = SMPL(sex='neutral', model_dir='assets/SMPL_NEUTRAL_renderpeople.pkl')
 

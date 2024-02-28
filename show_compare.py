@@ -14,6 +14,7 @@ log_name_list = ['Ours','Gauhuman','InstantNVR']
 # dataset = ['377','386','387','392','393','394']
 dataset = ['marc']
 
+
 for data in dataset:
     save_path = f'./vision/{data}_compare/'
     get_gt = True

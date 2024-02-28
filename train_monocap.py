@@ -345,10 +345,10 @@ if __name__ == "__main__":
     parser.add_argument('--port', type=int, default=6009)
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
-    parser.add_argument("--test_iterations", nargs="+", type=int, default=[2_200])
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[2_200])
-    # parser.add_argument("--test_iterations", nargs="+", type=int, default=[2_200,2500,2700, 3_000,3200,3400,3600]) # TODO:
-    # parser.add_argument("--save_iterations", nargs="+", type=int, default=[2_200,2500,2700, 3_000,3200,3400,3600])
+    # parser.add_argument("--test_iterations", nargs="+", type=int, default=[2_200])
+    # parser.add_argument("--save_iterations", nargs="+", type=int, default=[2_200])
+    parser.add_argument("--test_iterations", nargs="+", type=int, default=[2000,2_200,2500,2700, 3_000,3200,3400,3600]) # TODO:
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[2000,2_200,2500,2700, 3_000,3200,3400,3600])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
@@ -357,7 +357,7 @@ if __name__ == "__main__":
     # name_list = ['olek_images0812']
     name_list = ['olek_images0812',"lan_images620_1300", "marc_images35000_36200","vlad_images1011"]
     # file_name = 'monocap_w_o_gaussian_operate.txt'
-    file_name = 'monocap_w_o_gaussion_rot_scale.txt'
+    file_name = 'monocap_temp.txt'
     # file_name = 'monocap_w_o_gaussion_density_control.txt'
     save_path = f'result/{file_name}'
     file = open(save_path, 'a')
