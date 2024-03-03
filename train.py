@@ -129,7 +129,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # test_image[src_uv[0,:,1].type(torch.LongTensor), src_uv[0,:,0].type(torch.LongTensor)] = 1
         # imageio.imwrite(f'vertex_img.png', (255*test_image).cpu().detach().numpy().astype(np.uint8))
         
-        if iteration % 300 == 0:
+        if iteration > 900:
             RT = torch.cat([torch.tensor(viewpoint_cam.R.transpose()), torch.tensor(viewpoint_cam.T).reshape(3,1)], -1)[None, None].cuda()
             
             xyz = torch.repeat_interleave(torch.tensor(render_pkg['means3D'])[None, None], repeats=RT.shape[1], dim=1) #[bs, view_num, , 3]
@@ -368,8 +368,10 @@ if __name__ == "__main__":
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
     # parser.add_argument("--test_iterations", nargs="+", type=int, default=[2500])
     # parser.add_argument("--save_iterations", nargs="+", type=int, default=[2500])
-    parser.add_argument("--test_iterations", nargs="+", type=int, default=[2_200,2500,2700, 3_000,3200,3400,3600]) # TODO:
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[2_200,2500,2700, 3_000,3200,3400,3600])
+    # parser.add_argument("--test_iterations", nargs="+", type=int, default=[2_200,2500,2700, 3_000,3200,3400,3600]) # TODO:
+    # parser.add_argument("--save_iterations", nargs="+", type=int, default=[2_200,2500,2700, 3_000,3200,3400,3600])
+    parser.add_argument("--test_iterations", nargs="+", type=int, default=[2200, 2250, 2300, 2350, 2400, 2450, 2500, 2550, 2600, 2650, 2700, 2750, 2800, 2850, 2900, 2950, 3000, 3050, 3100, 3150, 3200, 3250, 3300, 3350, 3400,3450,3500,3550,3600]) # TODO:
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[2200, 2250, 2300, 2350, 2400, 2450, 2500, 2550, 2600, 2650, 2700, 2750, 2800, 2850, 2900, 2950, 3000, 3050, 3100, 3150, 3200, 3250, 3300, 3350, 3400,3450,3500,3550,3600])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
@@ -378,8 +380,8 @@ if __name__ == "__main__":
     #name_list = ['393','394'] 
     #name_list = ['393','394'] 
     # name_list = ['377','386','387','392','393','394']
-    name_list = ['377','386','387','392','393','394']
-    # name_list = ['377']
+    # name_list = ['377','386','387','392','393','394']
+    name_list = ['377']
     # file_name = 'w_o_autoregression.txt'
     file_name = 'temp.txt'   # temp
     save_path = f'result/{file_name}'
@@ -388,7 +390,7 @@ if __name__ == "__main__":
     for name in name_list:
         print("Train on",name)
         file.write('\n'+"my_"+name+'\n')
-        sys_list = ['-s', f'/home/zjlab1/dataset/ZJU_monocap/my_{name}', '--eval', '--exp_name', f'zju_mocap_refine/my_{name}_{file_name[:-4]}', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '3600']
+        sys_list = ['-s', f'/home/zjlab1/dataset/ZJU_monocap/my_{name}', '--eval', '--exp_name', f'zju_mocap_refine/my_{name}_{file_name[:-4]}', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '2600']
         #args = parser.parse_args(sys_list)
         args, _ = parser.parse_known_args(sys_list)
         args.save_iterations.append(args.iterations)
@@ -405,4 +407,3 @@ if __name__ == "__main__":
     # All done
     file.close()
     print("\nTraining complete.")
-

@@ -146,7 +146,9 @@ if __name__ == "__main__":
     # name_list = ["marc_images35000_36200"]
     log_name_list = ['monocap_temp']
     # iteration_list_list = [[2200,3400,3200,2700]]
-    iteration_list_list = [[3600,3400,3200,2200]]
+    iteration_list_list = [[3600,2000,2000,2200]]
+
+
 
 
 # log_name_list = ['monocap_w_o_gaussian_operate','monocap_w_o_gaussion_rot_scale','monocap_w_o_normal','monocap_w_o_gaussion_density_control','monocap_w_o_all'] 

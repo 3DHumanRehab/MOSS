@@ -149,9 +149,11 @@ if __name__ == "__main__":
     # log_name = 'normal_autoregression_and'
     # iteration_list = [2700,3200,2700,3000,2500,2500]
     # iteration_list_list = [[2700,3600,2500,3600,3400,2700][0]]
-    iteration_list_list = [[2200,2200,2200,2200,2200,3400]]
+    # iteration_list_list = [[2200,2200,2200,2200,2200,3400]]
+    iteration_list_list = [[2200]]
     # name_list = ['377']
-    name_list = ['377','386','387','392','393','394']
+    # name_list = ['377','386','387','392','393','394']
+    name_list = ['377']
     log_name_list=['temp']
     # log_name_list = ['MLP','autoregression_crossattention','w_o_normal','w_o_gaussion_density_control','w_o_gaussion_rot_scale','best_2']
     # iteration_list_list = [[1200],[800],[1500],[2700],[2700],[2700]]

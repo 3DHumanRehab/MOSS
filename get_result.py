@@ -4,7 +4,7 @@ np.set_printoptions(suppress=True)
 
 # txt_list = glob('/HOME/HOME/Caixiang/GauHuman/result/*.txt')
 # txt_list = glob('result/monocap_w_o_gaussion_rot_scale.txt')
-# txt_list = glob('result/monocap_temp.txt')
+#txt_list = glob('result/monocap_temp.txt')
 txt_list = glob('result/temp.txt')
 print(len(txt_list))
 

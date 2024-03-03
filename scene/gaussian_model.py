@@ -723,7 +723,7 @@ class GaussianModel:
         # rots = (rot_joint[selected_pts_mask].reshape(-1,3,3) @ rots).repeat(N,1,1)
 
         new_xyz = torch.bmm(rots, samples.unsqueeze(-1)).squeeze(-1) + self.get_xyz[selected_pts_mask].repeat(N, 1)
-        
+
         # FIXME: GS scale
         new_scaling = self.scaling_inverse_activation(self.get_scaling[selected_pts_mask].repeat(N,1) / (0.8*N))
         # new_scaling = self.scaling_inverse_activation((scl_joint[selected_pts_mask] * self.get_scaling[selected_pts_mask] / (0.8*N)).repeat(N,1) )

@@ -33,8 +33,8 @@ def calculate_relative_entropy(vectors_a, vectors_b):
 # path = 'big_vul_Qemu_t-SNE2_vecList.txt'
 # path2 = 'big_vul.pkl'
 
-path = 'd2a_Qemu_t-SNE2_vecList.txt'
-path2 = 'd2a.pkl'
+path = 'Chromeium_Qemu_t-SNE2_vecList.txt'
+path2 = 'Chromeium.pkl'
 
 # path = 'vdet_Qemu_t-SNE2_vecList.txt'
 # path2 = 'vdet.pkl'

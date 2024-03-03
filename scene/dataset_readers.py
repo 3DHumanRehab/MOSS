@@ -309,7 +309,7 @@ def get_camera_extrinsics_monocap(view_index, val=False, camera_view_num=36):
 
 def readCamerasMonoCapdata(path, output_view, white_background, image_scaling=1.0, split='train', novel_view_vis=False):
     cam_infos = []
-
+    output_view = [0]
     if 'olek_images0812' in path or 'vlad_images1011' in path:
         pose_start = 1
     else:
@@ -588,26 +588,26 @@ def readCamerasZJUMoCapRefine(path, output_view, white_background, image_scaling
     annots = np.load(ann_file, allow_pickle=True).item()
     cams = annots['cams']
     
-    # ims = np.array([
-    #     np.array(ims_data['ims'])[output_view]
-    #     for ims_data in annots['ims'][pose_start:pose_start + pose_num * pose_interval][::pose_interval]
-    # ])
-
-    # cam_inds = np.array([
-    #     np.arange(len(ims_data['ims']))[output_view]
-    #     for ims_data in annots['ims'][pose_start:pose_start + pose_num * pose_interval][::pose_interval]
-    # ])
-    
-    output_view = [0]
     ims = np.array([
         np.array(ims_data['ims'])[output_view]
-        for ims_data in annots['ims']
+        for ims_data in annots['ims'][pose_start:pose_start + pose_num * pose_interval][::pose_interval]
     ])
 
     cam_inds = np.array([
         np.arange(len(ims_data['ims']))[output_view]
-        for ims_data in annots['ims']
+        for ims_data in annots['ims'][pose_start:pose_start + pose_num * pose_interval][::pose_interval]
     ])
+    
+    # output_view = [4]
+    # ims = np.array([
+    #     np.array(ims_data['ims'])[output_view]
+    #     for ims_data in annots['ims']
+    # ])
+
+    # cam_inds = np.array([
+    #     np.arange(len(ims_data['ims']))[output_view]
+    #     for ims_data in annots['ims']
+    # ])
 
     # Data aug
     # if split == 'train' :
@@ -750,8 +750,8 @@ def readZJUMoCapRefineInfo(path, white_background, output_path, eval):
     print("Reading Training Transforms")
     train_cam_infos = readCamerasZJUMoCapRefine(path, train_view, white_background, split='train')
     print("Reading Test Transforms")
-    test_cam_infos = readCamerasZJUMoCapRefine(path, test_view, white_background, split='test', novel_view_vis=False)
-    
+    # test_cam_infos = readCamerasZJUMoCapRefine(path, test_view, white_background, split='test', novel_view_vis=False)
+    test_cam_infos = train_cam_infos
     if not eval:
         train_cam_infos.extend(test_cam_infos)
         test_cam_infos = []
