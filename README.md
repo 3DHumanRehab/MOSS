@@ -1,1 +1,2 @@
-MOSS: Motion-Based Clothed 3D Humans Synthesis from Monocular Video
+MOSS: 
+Motion-Based Clothed 3D Humans Synthesis from Monocular Video
