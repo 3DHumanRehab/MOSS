@@ -424,6 +424,7 @@ def readCamerasMonoCapdata(path, output_view, white_background, image_scaling=1.
             smpl_param['poses'] = np.array(params["poses"]).astype(np.float32).reshape(1,72)
             smpl_param['R'] = cv2.Rodrigues(Rh)[0].astype(np.float32) #np.eye(3).astype(np.float32)
             smpl_param['Th'] = Th #np.array(params["Th"]).astype(np.float32)
+            smpl_param['pose_rotmats'] = batch_rodrigues(torch.tensor(smpl_param['poses'][0]).contiguous().view(-1, 3))[1:]
             xyz, _ = smpl_model(smpl_param['poses'], smpl_param['shapes'].reshape(-1))
             xyz = (np.matmul(xyz, smpl_param['R'].transpose()) + smpl_param['Th']).astype(np.float32)
 
@@ -582,15 +583,8 @@ def readCamerasZJUMoCapRefine(path, output_view, white_background, image_scaling
         np.arange(len(ims_data['ims']))[output_view]
         for ims_data in annots['ims'][pose_start:pose_start + pose_num * pose_interval][::pose_interval]
     ])
-    
-    # Data aug
-    if split == 'train' :
-        mask = np.random.rand(cam_inds.shape[0],1)<0.05
-        new_cam = np.random.randint(0, 22, size=(cam_inds.shape[0], 1))
-        cam_inds[mask] = new_cam[mask]
-        cam_inds[cam_inds==3] = np.random.randint(5,22)
 
-    # TODO: watch these
+
     if 'CoreView_313' in path or 'CoreView_315' in path:
         for i in range(ims.shape[0]):
             ims[i] = [x.split('/')[0] + '/' + x.split('/')[1].split('_')[4] + '.jpg' for x in ims[i]]
@@ -690,14 +684,7 @@ def readCamerasZJUMoCapRefine(path, output_view, white_background, image_scaling
             smpl_param['Th'] = smpl_param['Th'].astype(np.float32)
             smpl_param['shapes'] = smpl_param['shapes'].astype(np.float32)
             smpl_param['poses'] = smpl_param['poses'].astype(np.float32)
-            
-            original_str = f"{i}"
-            json_path = path+"/easymocap/output-smpl-3d/smpl/"+original_str.zfill(6)+'.json'
-            with open(json_path, 'r') as file:
-                data = json.load(file)
-            smpl_param['pose_rotmats'] = batch_rodrigues(torch.tensor(data['annots'][0]['poses'][0]).contiguous().view(-1, 3)).view(23, 3, 3)
-            
-            # smpl_param['pose_rotmats'] = batch_rodrigues(torch.tensor(smpl_param['poses']).contiguous().view(-1, 3)).view(24, 3, 3)
+            smpl_param['pose_rotmats'] = batch_rodrigues(torch.tensor(smpl_param['poses'][0]).contiguous().view(-1, 3))[1:]
 
             # obtain the original bounds for point sampling
             min_xyz = np.min(xyz, axis=0)

@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from nets.GCNN import GraphResBlock
 from torch.utils.checkpoint import checkpoint
 
 class CrossAttention_lbs(nn.Module):
@@ -27,8 +26,7 @@ class CrossAttention_lbs(nn.Module):
         self.out_layer = nn.Linear(feature_dim,feature_dim)
         self.gate_proj = nn.Linear(feature_dim,feature_dim)
         self.dim = 45695
-        # self.graph  = GraphResBlock(self.dim,self.dim)
-        # self.graph.set_grad_checkpointing()
+ 
 
     def forward(self, query, key):
         features = xyz_embedder(query)
@@ -52,43 +50,10 @@ class CrossAttention_lbs(nn.Module):
         attention = F.softmax(attention_scores, dim=-1)
 
         output = torch.matmul(attention,V.transpose(-2, -1))
-        # new_input =  torch.zeros((1,self.dim,self.feature_dim)).to(output.device)
-        # new_input[:,:output.shape[1]] = output
-        # out = self.graph(new_input.transpose(1,2)).transpose(1,2)
-        # out = self.graph(new_input.transpose(1,2)).transpose(1,2)
-        # output = out[:,:output.shape[1]]
-        
-        # gate = torch.sigmoid(self.gate_proj(query))
-        # output = gate * self.out_layer(output)
+ 
         return output
 
-# class CrossAttention_lbs_without_bias(nn.Module):
-#     def __init__(self, feature_dim=24,mesh_dim = 3,rot_dim = 3, num_heads=3,):
-#         super(CrossAttention_lbs_without_bias, self).__init__()
-        
-#         self.feature_dim = feature_dim
-#         self.query = nn.Linear(mesh_dim, feature_dim)
-#         self.key = nn.Linear(rot_dim, feature_dim)
-#         self.value = nn.Linear(rot_dim, feature_dim)
-#         self.out_layer = nn.Linear(feature_dim,feature_dim)
-#         init_val =1e-5
-#         self.out_layer.weight.data.uniform_(-init_val, init_val)
-#         self.out_layer.bias.data.zero_()
-
-#     def forward(self, query, key):
-
-#         value = key
-#         Q = self.query(query) 
-#         K = self.key(key)     
-#         V = self.value(value) 
-
-#         attention_scores = torch.matmul(Q, K.transpose(-2, -1)) / (self.feature_dim ** 0.5)
-#         attention = F.softmax(attention_scores, dim=-1)
-
-#         output = torch.matmul(attention, V)
-#         output = self.out_layer(output)
-
-#         return output
+ 
 
 
 class LBSOffsetDecoder(nn.Module):

@@ -27,8 +27,6 @@ from gaussian_renderer import render, network_gui #model
 from arguments import ModelParams, PipelineParams, OptimizationParams
 from utils.loss_utils import l1_loss, l2_loss, ssim,matrix_fisher_nll,s3im_fun
 
-from setproctitle import setproctitle
-
 try:
     from torch.utils.tensorboard import SummaryWriter
     TENSORBOARD_FOUND = True
@@ -55,7 +53,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     iter_start = torch.cuda.Event(enable_timing = True)
     iter_end = torch.cuda.Event(enable_timing = True)
 
-    #损失函数
     viewpoint_stack = None
     ema_loss_for_log = 0.0
     Ll1_loss_for_log = 0.0
@@ -135,23 +132,16 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         s3im_loss = s3im_fun(img_pred, img_gt)
         
-        
-        # FIXME: Loss Fisher
-        # nll_loss = s3im_loss
-        
         data = render_pkg['pose_out']
         pred_F,pred_U,pred_S,pred_V,target_R = data['Rs'],data['pose_U'],data['pose_S'],data['pose_V'],data['target_R']
         joint_F += pred_F
         nll_loss = matrix_fisher_nll(pred_F,pred_U,pred_S,pred_V,target_R)
         nll_loss = nll_loss.mean() 
 
-
-        # FIXME: Loss Fisher
         loss = Ll1 + 0.5 * mask_loss +  0.2* (1.0 - ssim_loss) +  0.5* lpips_loss +  0.06 * nll_loss + 0.3 * s3im_loss
 
         loss.backward()
 
-        # end time
         end_time = time.time()
         # Calculate elapsed time
         elapsed_time += (end_time - start_time)
@@ -195,7 +185,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
                 if iteration > opt.densify_from_iter and iteration % opt.densification_interval == 0:
                     size_threshold = 20 if iteration > opt.opacity_reset_interval else None
-                    # gaussians.densify_and_prune(opt.densify_grad_threshold, 0.005, scene.cameras_extent, size_threshold, kl_threshold=0.4, t_vertices=viewpoint_cam.big_pose_world_vertex, iter=iteration)
                     gaussians.densify_and_prune(opt.densify_grad_threshold,joint_F,lbs_weights,0.005, scene.cameras_extent, size_threshold, kl_threshold=0.4, t_vertices=viewpoint_cam.big_pose_world_vertex, iter=iteration)
                     # init data
                     lbs_weights = None
@@ -247,8 +236,6 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
     # Report test and samples of training set
     if iteration in testing_iterations:
         torch.cuda.empty_cache()
-        # validation_configs = ({'name': 'test', 'cameras' : scene.getTestCameras()}, 
-        #                       {'name': 'train', 'cameras' : [scene.getTrainCameras()[idx % len(scene.getTrainCameras())] for idx in range(5, 30, 5)]})
 
         validation_configs = ({'name': 'test', 'cameras' : scene.getTestCameras()}, 
                               {'name': 'train', 'cameras' : scene.getTrainCameras()})
@@ -289,16 +276,11 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
                 print("\n[ITER {}] Evaluating {} #{}: L1 {} PSNR  SSIM  LPIPS".format(iteration, config['name'], len(config['cameras']), l1_test))
                 print(psnr_test.item(), ssim_test.item(), lpips_test.item()*1000)
 
-                #nni.report_intermediate_result(lpips_test.item()*1000)
-
-                #if iteration == 3600:
-                    #nni.report_final_result(lpips_test.item()*1000)
                 if config['name']=="test":
                     context = f'{iteration} {psnr_test.item()} {ssim_test.item()} {lpips_test.item()*1000}'
                     file.write(context)
                     file.write('\n')
                     return_metric = lpips_test.item()*1000
-                    # nni.report_final_result(lpips_test.item()*1000)
                     
                 if tb_writer:
                     tb_writer.add_scalar(config['name'] + '/loss_viewpoint - l1_loss', l1_test, iteration)
@@ -331,49 +313,35 @@ if __name__ == "__main__":
     parser.add_argument('--port', type=int, default=6009)
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
-    # parser.add_argument("--test_iterations", nargs="+", type=int, default=[1_200])
-    # parser.add_argument("--save_iterations", nargs="+", type=int, default=[1_200])
-    parser.add_argument("--test_iterations", nargs="+", type=int, default=[2_200,2500,2700, 3_000,3200,3400,3600]) # TODO:
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[2_200,2500,2700, 3_000,3200,3400,3600])
+    parser.add_argument("--test_iterations", nargs="+", type=int, default=[2500,2700,3000])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[2500,2700,3000])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
-    #name_list = ['393'] # 1200 iter  500 Density Control  100 iter/control
-    
+
     name_list = ['377','386','387','392','393','394'] 
-    file_name = 'best.txt'   # temp
+    # name_list = ['377'] 
+
+    file_name = 'ZJU.txt'   # temp
     save_path = f'result/{file_name}'
     file = open(save_path, 'a')
 
     for name in name_list:
         print("Train on",name)
         file.write('\n'+"my_"+name+'\n')
-        sys_list = ['-s', f'/home/tom/fsas/workspace/dataset/ZJU_monocap/my_{name}', '--eval', '--exp_name', f'zju_mocap_refine/my_{name}_{file_name[:-4]}', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '3600']
+        sys_list = ['-s', f'/home/tom/fsas/workspace/dataset/ZJU_monocap/my_{name}', '--eval', '--exp_name', f'zju_mocap_refine/my_{name}_{file_name[:-4]}', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '3000']
         #args = parser.parse_args(sys_list)
         args, _ = parser.parse_known_args(sys_list)
-        args.save_iterations.append(args.iterations)
 
-        tuner_params = nni.get_next_parameter()
-        params = vars(merge_parameter(args, tuner_params))
-
-        safe_state(params['quiet'])
+        safe_state(args.quiet)
         # Start GUI server, configure and run training
         # network_gui.init(args.ip, args.port)
-        torch.autograd.set_detect_anomaly(params['detect_anomaly'])
-        training(lp.extract(argparse.Namespace(**params)), op.extract(argparse.Namespace(**params)), pp.extract(argparse.Namespace(**params)), params['test_iterations'], params['save_iterations'], params['checkpoint_iterations'], params['start_checkpoint'], params['debug_from'],file)
+        torch.autograd.set_detect_anomaly(args.detect_anomaly)
+        # training(lp.extract(argparse.Namespace(**params)), op.extract(argparse.Namespace(**params)), pp.extract(argparse.Namespace(**params)), params['test_iterations'], params['save_iterations'], params['checkpoint_iterations'], params['start_checkpoint'], params['debug_from'],file)
+        training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from,file)
+
         
     # All done
     file.close()
     print("\nTraining complete.")
 
-    print("Optimizing " + args.model_path)
-    # Initialize system state (RNG)
-    safe_state(args.quiet)
-
-    # Start GUI server, configure and run training
-    network_gui.init(args.ip, args.port)
-    torch.autograd.set_detect_anomaly(args.detect_anomaly)
-    training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from)
-
-    # All done
-    print("\nTraining complete.")

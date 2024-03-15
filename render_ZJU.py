@@ -159,13 +159,12 @@ if __name__ == "__main__":
         args.source_path=f'/home/tom/fsas/workspace/dataset/ZJU_monocap/my_{args.data_name}'
         args.white_background=False
 
-        print("=====================================")
-        print("Rendering " + args.model_path)
-        print(args)
-        print("=====================================")
+        # print("=====================================")
+        print("Rendering " + args.exp_name)
+        # print(args)
+        # print("=====================================")
 
-        safe_state(args.quiet)
+        # safe_state(args.quiet)
 
-        render_sets(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test)
-
+        # render_sets(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test)
 

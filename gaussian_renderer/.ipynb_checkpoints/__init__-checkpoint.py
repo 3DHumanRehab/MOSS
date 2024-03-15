@@ -56,8 +56,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     means3D = pc.get_xyz
     pose_out = None
     
-    # FIXME: autoregression crossattension
-    # pc.motion_offset_flag =False
+
     if not pc.motion_offset_flag:
         _, means3D, _, transforms, _ = pc.coarse_deform_c2source(means3D[None], viewpoint_camera.smpl_param,viewpoint_camera.big_pose_smpl_param,viewpoint_camera.big_pose_world_vertex[None])
         bweights = None
@@ -65,31 +64,12 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         lbs_weights = None
     else:
         if transforms is None:
-            # highlight_train
-            # Ours
-            pose_out = pc.auto_regression(viewpoint_camera.smpl_param['poses'],)       # torch.Size([1, 72])
+            pose_out = pc.auto_regression(viewpoint_camera.smpl_param['poses'],)      
             correct_Rs = pose_out['Rs']
             pose_out['target_R'] = viewpoint_camera.smpl_param['pose_rotmats']
-            
-            # pose_ = viewpoint_camera.smpl_param['poses']
-            # batch_size = pose_.shape[0]
-            # rot_mats = batch_rodrigues(pose_.view(-1, 3)).view([batch_size, -1, 3, 3])
-            # rot_mats_no_root = rot_mats[:, 1:]
-            # correct_Rs = torch.matmul(rot_mats_no_root.reshape(-1, 3, 3), pose_out['Rs'].reshape(-1, 3, 3)).reshape(-1, 23, 3, 3)
 
-            # Baseline  
-            # pose_out = pc.pose_decoder(viewpoint_camera.smpl_param['poses'][:, 3:])  
-            # correct_Rs = pose_out['Rs']
-            
             lbs_weights = pc.cross_attention_lbs(means3D[None],correct_Rs)
             correct_Rs = pose_out['Rs'].reshape(1,23,3,3)
-            # correct_Rs = None
-
-            # Baseline
-            # lbs_weights = pc.weight_offset_decoder(means3D[None].detach()) # torch.Size([1, 6890, 3])
-            # lbs_weights = lbs_weights.permute(0,2,1)                       # torch.Size([1, 6890, 24])
-            # correct_Rs = None
-            # lbs_weights = None
             _, means3D, bweights, transforms, translation = pc.coarse_deform_c2source(means3D[None], viewpoint_camera.smpl_param,viewpoint_camera.big_pose_smpl_param,viewpoint_camera.big_pose_world_vertex[None], lbs_weights=lbs_weights, correct_Rs=correct_Rs, return_transl=return_smpl_rot)
         else:
             bweights = None
@@ -97,9 +77,9 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             lbs_weights = None
             means3D = torch.matmul(transforms, means3D[..., None]).squeeze(-1) + translation
 
-    means3D = means3D.squeeze()  # torch.Size([6890, 3])
-    means2D = screenspace_points  # torch.Size([6890, 3])
-    opacity = pc.get_opacity       # torch.Size([6890, 1])
+    means3D = means3D.squeeze()  
+    means2D = screenspace_points 
+    opacity = pc.get_opacity     
 
     # If precomputed 3d covariance is provided, use it. If not, then it will be computed from
     # scaling / rotation by the rasterizer.

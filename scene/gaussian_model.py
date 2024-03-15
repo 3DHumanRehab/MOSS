@@ -28,7 +28,6 @@ from utils.general_utils import strip_symmetric, build_scaling_rotation
 from knn_cuda import KNN
 import pickle
 import torch.nn.functional as F
-# from gaussian_renderer import render
 from nets.mlp_delta_body_pose import BodyPoseRefiner,Autoregression
 from nets.mlp_delta_weight_lbs import LBSOffsetDecoder,CrossAttention_lbs
 
@@ -92,14 +91,7 @@ class GaussianModel:
         if self.motion_offset_flag:
             # load pose correction module
             total_bones = self.SMPL_NEUTRAL['weights'].shape[-1]
-            self.pose_decoder = BodyPoseRefiner(total_bones=total_bones, embedding_size=3*(total_bones-1), mlp_width=128, mlp_depth=2)
-            self.pose_decoder.to(self.device)
-
-            # load lbs weight module
-            self.weight_offset_decoder = LBSOffsetDecoder(total_bones=total_bones)
-            self.weight_offset_decoder.to(self.device)
             
-            # auto regression
             self.auto_regression = Autoregression(device=self.device)
             self.auto_regression.to(self.device)
             
@@ -120,7 +112,7 @@ class GaussianModel:
             self.denom,
             self.optimizer.state_dict(),
             self.spatial_lr_scale,
-            self.pose_decoder,
+            self.auto_regression,
             self.weight_offset_decoder,
         )
     
@@ -137,7 +129,7 @@ class GaussianModel:
         denom,
         opt_dict, 
         self.spatial_lr_scale,
-        self.pose_decoder,
+        self.auto_regression,
         self.weight_offset_decoder) = model_args
         self.training_setup(training_args)
         self.xyz_gradient_accum = xyz_gradient_accum
@@ -222,7 +214,6 @@ class GaussianModel:
                 {'params': [self._rotation], 'lr': training_args.rotation_lr, "name": "rotation"}
             ]
         else:
-            # Highlight_lr  # TODO:
             l = [
                 {'params': [self._xyz], 'lr': training_args.position_lr_init * self.spatial_lr_scale, "name": "xyz"},
                 {'params': [self._features_dc], 'lr': training_args.feature_lr, "name": "f_dc"},
@@ -230,16 +221,10 @@ class GaussianModel:
                 {'params': [self._opacity], 'lr': training_args.opacity_lr, "name": "opacity"},
                 {'params': [self._scaling], 'lr': training_args.scaling_lr, "name": "scaling"},
                 {'params': [self._rotation], 'lr': training_args.rotation_lr, "name": "rotation"},
-                {'params': self.pose_decoder.parameters(), 'lr': training_args.pose_refine_lr, "name": "pose_decoder"},
-                # {'params': self.auto_regression.parameters(),'lr':training_args.pose_refine_lr*5,"name":"auto_regression"},
                 {'params': self.auto_regression.parameters(),'lr':training_args.auto_regression,"name":"auto_regression"},
-                # {'params': self.auto_regression.parameters(),'lr':training_args.pose_refine_lr,"name":"auto_regression"},
-                # {'params': self.auto_regression.parameters(),'lr':0.00001,"name":"auto_regression"},
-                {'params': self.weight_offset_decoder.parameters(), 'lr': training_args.lbs_offset_lr, "name": "weight_offset_decoder"},
                 {'params': self.cross_attention_lbs.parameters(), 'lr': training_args.cross_attention_lbs, "name": "cross_attention_lbs"},
             ] 
 
-        # self.optimizer = torch.optim.Adam(l, lr=0.0, eps=1e-15)
         self.optimizer = torch.optim.AdamW(l, lr=0.0, eps=1e-15)
         self.xyz_scheduler_args = get_expon_lr_func(lr_init=training_args.position_lr_init*self.spatial_lr_scale,
                                                     lr_final=training_args.position_lr_final*self.spatial_lr_scale,
@@ -529,55 +514,33 @@ class GaussianModel:
 
     def kl_densify_and_clone(self, grads,rot_joint,scl_joint, grad_threshold, scene_extent, kl_threshold=0.4):
         if self._xyz.shape[0]>45695:
-            print("==================================")
-            print("self._xyz.shape:",self._xyz.shape)
             return
         # Extract points that satisfy the gradient condition
         selected_pts_mask = torch.where(torch.norm(grads, dim=-1) >= grad_threshold, True, False)
         selected_pts_mask = torch.logical_and(selected_pts_mask,
                                               torch.max(self.get_scaling, dim=1).values <= self.percent_dense*scene_extent)
-
-        # for each gaussian point, find its nearest 2 points and return the distance
         self.kl_selected_pts_mask = self.cal_kl(kl_threshold)
-           
-        # FIXME: normal_angle_mask
         normals = self.compute_normals_co3d(self._xyz)
-        # mean_angle = compute_mean_angle(points, normals)
-        # normal_angle_mask = mean_angle > angle_threshold
+
         angle_threshold = 0.1
         distance_threshold = 0.05
         normal_angle_mask = self.compute_angle_change_rate(self._xyz,normals,angle_threshold,distance_threshold)
         print("normal_angle_mask",normal_angle_mask.sum())
         
-        # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask 
-        # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask | normal_angle_mask
-        # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & normal_angle_mask  # ME
-        selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask   # ME
+        selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & normal_angle_mask  # ME
         
         print("[kl clone]: ", (selected_pts_mask).sum().item())
 
-        # FIXME: density get_scaling
-        # stds = self.get_scaling[selected_pts_mask]
         stds = scl_joint[selected_pts_mask]*self.get_scaling[selected_pts_mask]
  
         means = torch.zeros((stds.size(0), 3),device="cuda")
         samples = torch.normal(mean=means, std=stds)
         rots = build_rotation(self._rotation[selected_pts_mask])  # (*,3,3)
 
-        # FIXME: density rots
-        rots = rots
-        # rots = rots @ rot_joint[selected_pts_mask].reshape(-1,3,3)
-        # rots = rot_joint[selected_pts_mask].reshape(-1,3,3) @ rots  # ME
-        
+        rots = rot_joint[selected_pts_mask].reshape(-1,3,3) @ rots  
         new_xyz = torch.bmm(rots, samples.unsqueeze(-1)).squeeze(-1) + self.get_xyz[selected_pts_mask]
-        
-        # FIXME: GS scale
-        new_scaling = self.scaling_inverse_activation(self.get_scaling[selected_pts_mask])
-        # new_scaling = self.scaling_inverse_activation(self.get_scaling[selected_pts_mask] * scl_joint[selected_pts_mask])
-        
-        # FIXME: GS rot
-        new_rotation = self._rotation[selected_pts_mask]
-        # new_rotation = matrix_to_quaternion(rot_joint[selected_pts_mask].reshape(-1,3,3)) * self._rotation[selected_pts_mask] 
+        new_scaling = self.scaling_inverse_activation(self.get_scaling[selected_pts_mask] * scl_joint[selected_pts_mask])
+        new_rotation = matrix_to_quaternion(rot_joint[selected_pts_mask].reshape(-1,3,3)) * self._rotation[selected_pts_mask] 
 
         new_features_dc = self._features_dc[selected_pts_mask]
         new_features_rest = self._features_rest[selected_pts_mask]
@@ -586,14 +549,12 @@ class GaussianModel:
         self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacity, new_scaling, new_rotation)
 
     def kl_densify_and_split(self, grads,origin_rot_joint,origin_scl_joint, grad_threshold, scene_extent, kl_threshold=0.4, N=2):
-        #  grad_threshold 0.0002
+
         if self._xyz.shape[0]>45695:
-            print("==================================")
-            print("self._xyz.shape:",self._xyz.shape)
+            # Control the Gaussians num.
             return
         n_init_points = self.get_xyz.shape[0]
         # Extract points that satisfy the gradient condition
-        # FIXME: Fisher
         rot_joint = torch.zeros((n_init_points,3,3), device="cuda")
         rot_joint[:grads.shape[0]] = origin_rot_joint
         scl_joint = torch.zeros((n_init_points,3), device="cuda")
@@ -608,40 +569,22 @@ class GaussianModel:
         # for each gaussian point, find its nearest 2 points and return the distance
         self.kl_selected_pts_mask = self.cal_kl(kl_threshold) 
         
-        # FIXME: normal_angle_mask
-        # normals = self.compute_normals_co3d(self._xyz)
-        # # mean_angle = compute_mean_angle(points, normals)
-        # # normal_angle_mask = mean_angle > angle_threshold
-        # angle_threshold = 0.1
-        # distance_threshold = 0.05
-        # normal_angle_mask = self.compute_angle_change_rate(self._xyz,normals,angle_threshold,distance_threshold)
-        # print("normal_angle_mask",normal_angle_mask.sum())
-        # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & normal_angle_mask  # ME
-        
         selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask
 
         print("[kl split]: ", (selected_pts_mask).sum().item())
 
         stds = self.get_scaling[selected_pts_mask].repeat(N,1)
-        # stds = (scl_joint[selected_pts_mask]*self.get_scaling[selected_pts_mask]).repeat(N,1)
         
         means =torch.zeros((stds.size(0), 3),device="cuda")
         samples = torch.normal(mean=means, std=stds)
         
-        # FIXME: Fisher
         rots = build_rotation(self._rotation[selected_pts_mask]).repeat(N,1,1)
-        #rots = build_rotation(self._rotation[selected_pts_mask])
-        #rots = (rot_joint[selected_pts_mask].reshape(-1,3,3) @ rots).repeat(N,1,1)
         
         new_xyz = torch.bmm(rots, samples.unsqueeze(-1)).squeeze(-1) + self.get_xyz[selected_pts_mask].repeat(N, 1)
         
-        # FIXME: GS scale
         new_scaling = self.scaling_inverse_activation(self.get_scaling[selected_pts_mask].repeat(N,1) / (0.8*N))
-        #new_scaling = self.scaling_inverse_activation((scl_joint[selected_pts_mask] * self.get_scaling[selected_pts_mask] / (0.8*N)).repeat(N,1) )
         
-        # FIXME: GS rot
         new_rotation = self._rotation[selected_pts_mask].repeat(N,1)
-        #new_rotation = (matrix_to_quaternion(rot_joint[selected_pts_mask].reshape(-1,3,3)) * self._rotation[selected_pts_mask]).repeat(N,1)
         
         new_features_dc = self._features_dc[selected_pts_mask].repeat(N,1,1)
         new_features_rest = self._features_rest[selected_pts_mask].repeat(N,1,1)
@@ -654,8 +597,7 @@ class GaussianModel:
 
     def kl_merge(self, grads,grad_threshold, scene_extent, kl_threshold=0.1):
         if self._xyz.shape[0]>45695:
-            print("==================================")
-            print("self._xyz.shape:",self._xyz.shape)
+            # Control the Gaussians num.
             return
         n_init_points = self.get_xyz.shape[0]
         # Extract points that satisfy the gradient condition
@@ -706,11 +648,6 @@ class GaussianModel:
     def densify_and_prune(self, max_grad,joint_F,lbs_weights, min_opacity, extent, max_screen_size, kl_threshold=0.4, t_vertices=None, iter=None):
         grads = self.xyz_gradient_accum / self.denom
         
-        # FIXME: Fisher
-        
-        # rot_joint = None
-        # scl_joint = None
-        
         joint_F =  joint_F / self.denom[0]
         lbs_weights = lbs_weights / self.denom[0]
         
@@ -723,10 +660,8 @@ class GaussianModel:
             joint_V[:, :, 2] *= det_joint_V.unsqueeze(-1)
         
         rot_joint = torch.matmul(joint_U, joint_V.transpose(dim0=-1, dim1=-2))
-        # rot_joint = rot_joint.reshape(23,9)   # TODO:使用target rot  debug 查看根节点的旋转矩阵
-        # rot_joint = (lbs_weights[0,:,1:]@rot_joint).reshape(-1,3,3)
         
-        rot_joint = torch.cat([torch.ones(1,3,3).cuda(),rot_joint],dim=0).reshape(24,9)   # TODO:使用target rot  debug 查看根节点的旋转矩阵
+        rot_joint = torch.cat([torch.ones(1,3,3).cuda(),rot_joint],dim=0).reshape(24,9)
         rot_joint = (lbs_weights[0]@rot_joint).reshape(-1,3,3)
 
         scl_joint = torch.cat([torch.ones(1,3).cuda(),joint_S],dim=0) 
@@ -739,23 +674,17 @@ class GaussianModel:
         self.kl_densify_and_split(grads,rot_joint,scl_joint, max_grad, extent, kl_threshold)
         self.kl_merge(grads, max_grad, extent, 0.1)
 
-        # TODO: min_opacity
         prune_mask = (self.get_opacity < min_opacity).squeeze()
         if max_screen_size:
             big_points_vs = self.max_radii2D > max_screen_size
             big_points_ws = self.get_scaling.max(dim=1).values > 0.1 * extent
             prune_mask = torch.logical_or(torch.logical_or(prune_mask, big_points_vs), big_points_ws)
 
-        # TODO: 剔除离群点
         # use smpl prior to prune points 
         distance, _ = self.knn(t_vertices[None], self._xyz[None].detach())
         distance = distance.view(distance.shape[0], -1)
         threshold = 0.05
         pts_mask = (distance > threshold).squeeze()
-        # from sklearn.ensemble import IsolationForest
-        # clf = IsolationForest(random_state=0).fit(self._xyz.detach().cpu().reshape(-1, 3))
-        # outliers = self._xyz[clf.predict(self._xyz.detach().cpu().reshape(-1, 3)) == -1]
-        # print("Outliers:", outliers)
         
         prune_mask = prune_mask | pts_mask
         print('total points num: ', self._xyz.shape[0], 'prune num: ', prune_mask.sum().item())        
@@ -764,75 +693,31 @@ class GaussianModel:
         torch.cuda.empty_cache()
 
 
-        # import matplotlib.pyplot as plt
-        # from mpl_toolkits.mplot3d import Axes3D
-        # import numpy as np
-        # points =  t_vertices.detach().cpu().numpy()
-
-        # # 创建一个3D坐标系
-        # fig = plt.figure()
-        # ax = fig.add_subplot(111, projection='3d')
-
-        # # 画点
-        # ax.scatter(points[:, 0], points[:, 1], points[:, 2])
-
-        # # 在每个点周围画圈
-        # for point in points:
-        #     # 创建一个球面
-        #     u, v = np.mgrid[0:2*np.pi:20j, 0:np.pi:10j]
-        #     x = np.cos(u) * np.sin(v)
-        #     y = np.sin(u) * np.sin(v)
-        #     z = np.cos(v)
-            
-        #     # 缩放和平移球面来创建圆圈
-        #     radius = 0.05
-        #     x = radius * x + point[0]
-        #     y = radius * y + point[1]
-        #     z = radius * z + point[2]
-            
-        #     # 画圆圈
-        #     ax.plot_wireframe(x, y, z, color="r")
-
-        # # 设置坐标轴标签
-        # ax.set_xlabel('X Axis')
-        # ax.set_ylabel('Y Axis')
-        # ax.set_zlabel('Z Axis')
-
-        # plt.savefig("3d_plot.png", dpi=300)  # 保存为PNG文件，分辨率300dpi
-
-        # # 关闭图形，释放资源
-        # plt.close(fig)
-
-
     def compute_normals_co3d(self,points, radius=0.1, max_nn=5):
         point_3d = points.detach().cpu().numpy()
-        # 将numpy数组转换为Open3D的点云对象
+        # Numpy to open3D
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(point_3d)
 
-        # 计算法向量
+        # Calculate Normals
         pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=radius, max_nn=max_nn))
 
-        # 将法向量从Open3D的点云对象转换回numpy数组
+        # Open3D to numpy
         normals = np.asarray(pcd.normals)
         normals = torch.tensor(normals, dtype=torch.float32 ,device ="cuda")
         return normals
 
     def compute_normals(self,points, k=5, use_centroid=True, external_ref_point=None):
-            # 确保点云数据存在
-            # print("points",points)
             points = points.detach().cpu().numpy()
             normals = np.zeros_like(points)
 
-            # 计算点云的中心或使用外部参考点
             if use_centroid:
                 centroid = np.mean(points, axis=0)
             elif external_ref_point is not None:
                 centroid = external_ref_point
             else:
-                raise ValueError("需要提供点云的中心或外部参考点")
+                raise ValueError("Need provide center of point clouds or reference.")
 
-            # 使用k-NN找到邻域点
             tree = KDTree(points)
             for i, point in enumerate(points):
                 _, idx = tree.query(point, k=k)
@@ -840,41 +725,32 @@ class GaussianModel:
                     print("point",point)
                     print("idx",i)
                 neighbors = points[idx]
-                # 平面拟合
                 mean = np.mean(neighbors, axis=0)
                 cov = np.cov((neighbors - mean).T)
                 eigenvalues, eigenvectors = np.linalg.eig(cov)
                 normal = eigenvectors[:, np.argmin(eigenvalues)]
 
-                # 判断并调整法向量方向
                 if np.dot(normal, centroid - point) > 0:
-                    normal = -normal  # 反转法向量
+                    normal = -normal 
 
                 normals[i] = normal
 
-            # 转换回torch.Tensor并存储
             normals = torch.tensor(normals, dtype=torch.float32)
             return normals
 
 
     def compute_angle_change_rate(self,positions, normals,threshold,distance_threshold = 0.1):
-        # 将输入转换为 numpy
         positions_np = positions.detach().cpu().numpy()
         normals_np = normals.detach().cpu().numpy()
 
-        # 使用 KDTree 找到每个点的最近邻
         tree = KDTree(positions_np)
         _, indices = tree.query(positions_np, k=5)
 
-        # 初始化一个空的变化率列表
         mask = []
-        # 对每个点和其邻居进行处理
         for idx in indices:
-            # 获取邻域内的法向量和位置
             neighborhood_normals = normals_np[idx]
             neighborhood_positions = positions_np[idx]
 
-            # 计算邻域内所有点的法向量之间的角度和距离
             angles = []
             distances = []
             for pair in itertools.combinations(range(len(neighborhood_normals)), 2):
@@ -882,7 +758,7 @@ class GaussianModel:
                 v1, v2 = neighborhood_normals[i], neighborhood_normals[j]
                 p1, p2 = neighborhood_positions[i], neighborhood_positions[j]
                 distance = np.linalg.norm(p1 - p2)
-                if distance < distance_threshold:  # 当距离小于阈值时，跳过此次循环
+                if distance < distance_threshold:  
                     continue
                 dot_product = np.dot(v1, v2)
                 v1_norm = np.linalg.norm(v1)
@@ -893,20 +769,16 @@ class GaussianModel:
                 angles.append(angle)
                 distances.append(distance)
 
-            # 计算角度变化率
             angles = np.array(angles)
             distances = np.array(distances)
             sorted_indices = np.argsort(distances)
             sorted_angles = angles[sorted_indices]
             angle_change_rate = np.diff(sorted_angles) / np.diff(distances[sorted_indices])
             # print("angle_change_rate",angle_change_rate)
-            # 将变化率添加到列表中
             mean_change_rate = np.mean(angle_change_rate)
 
-            # 若均值超过阈值，则保留该点的掩码
             mask.append(mean_change_rate > threshold)
 
-            #转为tensor
         mask = torch.tensor(mask, dtype=torch.bool,device="cuda")
         return mask
 

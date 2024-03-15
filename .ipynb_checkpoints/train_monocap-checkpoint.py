@@ -1,3 +1,14 @@
+#
+# Copyright (C) 2023, Inria
+# GRAPHDECO research group, https://team.inria.fr/graphdeco
+# All rights reserved.
+#
+# This software is free for non-commercial, research and evaluation use 
+# under the terms of the LICENSE.md file.
+#
+# For inquiries contact  george.drettakis@inria.fr
+#
+
 import os
 import cv2
 import time
@@ -126,6 +137,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         joint_F += pred_F
         nll_loss = matrix_fisher_nll(pred_F,pred_U,pred_S,pred_V,target_R)
         nll_loss = nll_loss.mean() 
+
 
         loss = Ll1 + 0.5 * mask_loss +  0.2* (1.0 - ssim_loss) +  0.5* lpips_loss +  0.06 * nll_loss + 0.3 * s3im_loss
 
@@ -312,23 +324,26 @@ if __name__ == "__main__":
     #name_list = ['393'] # 1200 iter  500 Density Control  100 iter/control
 
     name_list = ['olek_images0812',"lan_images620_1300", "marc_images35000_36200","vlad_images1011"]
+    # file_name = 'monocap_w_o_gaussian_operate.txt'
     file_name = 'monocap.txt'
+    # file_name = 'monocap_w_o_gaussion_density_control.txt'
     save_path = f'result/{file_name}'
     file = open(save_path, 'a')
 
     for name in name_list:
         print("Train on",name)
         file.write('\n'+"my_"+name+'\n')
-        sys_list = ['-s', f'/home/tom/fsas/workspace/dataset/monocap/{name}', '--eval', '--exp_name', f'zju_mocap_refine/my_{name}_{file_name[:-4]}', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '3000']
+        sys_list = ['-s', f'/home/tom/fsas/workspace/dataset/monocap/{name}', '--eval', '--exp_name', f'zju_mocap_refine/my_{name}_{file_name[:-4]}', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '3600']
         #args = parser.parse_args(sys_list)
         args, _ = parser.parse_known_args(sys_list)
-
-        safe_state(args.quiet)
+        args.save_iterations.append(args.iterations)
+        tuner_params = nni.get_next_parameter()
+        params = vars(merge_parameter(args, tuner_params))
+        safe_state(params['quiet'])
         # Start GUI server, configure and run training
         # network_gui.init(args.ip, args.port)
-        torch.autograd.set_detect_anomaly(args.detect_anomaly)
-        # training(lp.extract(argparse.Namespace(**params)), op.extract(argparse.Namespace(**params)), pp.extract(argparse.Namespace(**params)), params['test_iterations'], params['save_iterations'], params['checkpoint_iterations'], params['start_checkpoint'], params['debug_from'],file)
-        training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from,file)
+        torch.autograd.set_detect_anomaly(params['detect_anomaly'])
+        training(lp.extract(argparse.Namespace(**params)), op.extract(argparse.Namespace(**params)), pp.extract(argparse.Namespace(**params)), params['test_iterations'], params['save_iterations'], params['checkpoint_iterations'], params['start_checkpoint'], params['debug_from'],file)
     # All done
     file.close()
     print("\nTraining complete.")
