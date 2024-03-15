@@ -138,13 +138,13 @@ if __name__ == "__main__":
     args.eval=True
  
     name_list = ['377','386','387','392','393','394']
-    log_name = 'best_4'
+    log_name = ''
     iteration_list = [2700,2700,3000,3000,2500,2700]
 
     
     for iteration,data_name in zip(iteration_list,name_list):
         args.data_name = data_name
-        args.exp_name=f'/home/tom/fsas/workspace/Caixiang/MOSS/output/zju_mocap_refine/my_{args.data_name}_{log_name}'
+        args.exp_name=f'/home/tom/fsas/workspace/Caixiang/MOSS/output/ZJU/my_{args.data_name}'
         args.iteration=iteration
         args.images='images'
         # args.model_path=f'output/{args.exp_name}'
@@ -159,12 +159,15 @@ if __name__ == "__main__":
         args.source_path=f'/home/tom/fsas/workspace/dataset/ZJU_monocap/my_{args.data_name}'
         args.white_background=False
 
-        # print("=====================================")
+        print("=====================================")
         print("Rendering " + args.exp_name)
-        # print(args)
-        # print("=====================================")
+        print(args)
+        print("=====================================")
 
-        # safe_state(args.quiet)
+        safe_state(args.quiet)
 
-        # render_sets(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test)
+        render_sets(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test)
+
+
+
 

@@ -113,7 +113,7 @@ class GaussianModel:
             self.optimizer.state_dict(),
             self.spatial_lr_scale,
             self.auto_regression,
-            self.weight_offset_decoder,
+            self.cross_attention_lbs,
         )
     
     def restore(self, model_args, training_args):
@@ -130,7 +130,7 @@ class GaussianModel:
         opt_dict, 
         self.spatial_lr_scale,
         self.auto_regression,
-        self.weight_offset_decoder) = model_args
+        self.self.cross_attention_lbs) = model_args
         self.training_setup(training_args)
         self.xyz_gradient_accum = xyz_gradient_accum
         self.denom = denom
@@ -525,11 +525,8 @@ class GaussianModel:
         angle_threshold = 0.1
         distance_threshold = 0.05
         normal_angle_mask = self.compute_angle_change_rate(self._xyz,normals,angle_threshold,distance_threshold)
-        print("normal_angle_mask",normal_angle_mask.sum())
         
-        selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & normal_angle_mask  # ME
-        
-        print("[kl clone]: ", (selected_pts_mask).sum().item())
+        selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & normal_angle_mask  # ME        
 
         stds = scl_joint[selected_pts_mask]*self.get_scaling[selected_pts_mask]
  
@@ -570,8 +567,6 @@ class GaussianModel:
         self.kl_selected_pts_mask = self.cal_kl(kl_threshold) 
         
         selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask
-
-        print("[kl split]: ", (selected_pts_mask).sum().item())
 
         stds = self.get_scaling[selected_pts_mask].repeat(N,1)
         
@@ -625,8 +620,6 @@ class GaussianModel:
         self.kl_selected_pts_mask = kl_div < kl_threshold
 
         selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask
-
-        print("[kl merge]: ", (selected_pts_mask & self.kl_selected_pts_mask).sum().item())
 
         if selected_pts_mask.sum() >= 1:
 

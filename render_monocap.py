@@ -143,12 +143,12 @@ if __name__ == "__main__":
 
     name_list = ['olek_images0812',"lan_images620_1300", "marc_images35000_36200","vlad_images1011"]
     log_name = 'monocap'
-    iteration_list = [2700,2500,2500,2200]
+    iteration_list = [2700,2500,2500,2500]
     
     
     for iteration,data_name in zip(iteration_list,name_list):
         args.data_name = data_name
-        args.exp_name=f'/home/tom/fsas/workspace/Caixiang/MOSS/output/zju_mocap_refine/Monocap/my_{args.data_name}_{log_name}'
+        args.exp_name=f'/home/tom/fsas/workspace/Caixiang/MOSS/output/Monocap/my_{args.data_name}_{log_name}'
         args.iteration=iteration
         args.images='images'
         # args.model_path=f'output/{args.exp_name}'

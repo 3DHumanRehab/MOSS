@@ -320,7 +320,6 @@ if __name__ == "__main__":
     parser.add_argument("--start_checkpoint", type=str, default = None)
 
     name_list = ['377','386','387','392','393','394'] 
-    # name_list = ['377'] 
 
     file_name = 'ZJU.txt'   # temp
     save_path = f'result/{file_name}'

@@ -311,7 +311,8 @@ if __name__ == "__main__":
     parser.add_argument("--start_checkpoint", type=str, default = None)
     #name_list = ['393'] # 1200 iter  500 Density Control  100 iter/control
 
-    name_list = ['olek_images0812',"lan_images620_1300", "marc_images35000_36200","vlad_images1011"]
+    # name_list = ['olek_images0812',"lan_images620_1300", "marc_images35000_36200","vlad_images1011"]
+    name_list = ['olek_images0812']
     file_name = 'monocap.txt'
     save_path = f'result/{file_name}'
     file = open(save_path, 'a')
@@ -319,7 +320,7 @@ if __name__ == "__main__":
     for name in name_list:
         print("Train on",name)
         file.write('\n'+"my_"+name+'\n')
-        sys_list = ['-s', f'/home/tom/fsas/workspace/dataset/monocap/{name}', '--eval', '--exp_name', f'zju_mocap_refine/my_{name}_{file_name[:-4]}', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '3000']
+        sys_list = ['-s', f'/home/tom/fsas/workspace/dataset/monocap/{name}', '--eval', '--exp_name', f'monocap/my_{name}_{file_name[:-4]}', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '3000']
         #args = parser.parse_args(sys_list)
         args, _ = parser.parse_known_args(sys_list)
 
