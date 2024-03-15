@@ -4,3 +4,5 @@ lpips==0.1.4
 tensorboard==2.14.0
 tqdm==4.66.1
 numpy==1.23.5
+open3d==0.18.0
+pytorch3d==0.3.0

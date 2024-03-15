@@ -6,7 +6,6 @@ diff_rasterization/diff_rast.egg-info
 diff_rasterization/dist
 tensorboard_3d
 screenshots
-assets/
 *.png
 *.jpg
 *.obj
@@ -15,6 +14,4 @@ assets/
 *.ply
 *.json
 *.mtl
-data/
 output/
-my_392/

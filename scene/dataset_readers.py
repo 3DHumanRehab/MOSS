@@ -1,14 +1,3 @@
-#
-# Copyright (C) 2023, Inria
-# GRAPHDECO research group, https://team.inria.fr/graphdeco
-# All rights reserved.
-#
-# This software is free for non-commercial, research and evaluation use 
-# under the terms of the LICENSE.md file.
-#
-# For inquiries contact  george.drettakis@inria.fr
-#
-
 import os
 import sys
 from PIL import Image
@@ -595,11 +584,11 @@ def readCamerasZJUMoCapRefine(path, output_view, white_background, image_scaling
     ])
     
     # Data aug
-    # if split == 'train' :
-    #     mask = np.random.rand(cam_inds.shape[0],1)<0.05
-    #     new_cam = np.random.randint(0, 22, size=(cam_inds.shape[0], 1))
-    #     cam_inds[mask] = new_cam[mask]
-    #     cam_inds[cam_inds==3] = np.random.randint(5,22)
+    if split == 'train' :
+        mask = np.random.rand(cam_inds.shape[0],1)<0.05
+        new_cam = np.random.randint(0, 22, size=(cam_inds.shape[0], 1))
+        cam_inds[mask] = new_cam[mask]
+        cam_inds[cam_inds==3] = np.random.randint(5,22)
 
     # TODO: watch these
     if 'CoreView_313' in path or 'CoreView_315' in path:

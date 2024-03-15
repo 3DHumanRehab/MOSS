@@ -1,14 +1,8 @@
 <div align="center">
 
-<h1>GauHuman: Articulated Gaussian Splatting from Monocular Human Videos</h1>
+<h1> MOSS: Motion-based 3D Clothed Human 001 001 Synthesis from Monocular Video</h1>
 
-<div>
-    <a href="https://skhu101.github.io" target="_blank">Shoukang Hu</a>;
-    <a href="https://liuziwei7.github.io/" target="_blank">Ziwei Liu</a>
-</div>
-<div>
-    S-Lab, Nanyang Technological University
-</div>
+ 
 
 GauHuman learns articulated Gaussian Splatting from monocular videos with both <strong>fast training</strong> (1~2 minutes) and <strong>real-time rendering</strong> (up to 189 FPS).
 
@@ -17,15 +11,12 @@ GauHuman learns articulated Gaussian Splatting from monocular videos with both <
     <em>GauHuman learns articulated Gaussian Splatting from monocular videos with both <strong>fast training</strong> (1~2 minutes) and <strong>real-time rendering</strong> (up to 189 FPS).</em>
 </div>
 
-:open_book: For more visual results, go checkout our <a href="https://skhu101.github.io/GauHuman" target="_blank">project page</a>
+:open_book: For more visual results, go checkout our <a href="http://124.70.164.141:8082" target="_blank">project page</a>
 
-This repository will contain the official implementation of _GauHuman: Articulated Gaussian Splatting from Monocular Human Videos_.
+This repository will contain the official implementation of _MOSS_.
 
 <div align="left">
-
-## :mega: Updates
-[12/2023] Training and inference codes for ZJU-Mocap_refine and MonoCap are released.
-
+ 
 ## :desktop_computer: Requirements
 <!-- --- -->
 NVIDIA GPUs are required for this project.
@@ -50,7 +41,7 @@ Tips: We implement the [alpha mask loss version](https://github.com/ashawkey/dif
 Please follow instructions of [Instant-NVR](https://github.com/zju3dv/instant-nvr/blob/master/docs/install.md#set-up-datasets) to download ZJU-Mocap-Refine and MonoCap dataset.
 
 
-## Download SMPL Models
+<!-- ## Download SMPL Models
 
 Register and download SMPL models [here](https://smpl.is.tue.mpg.de/). Put the downloaded models in the folder smpl_models. Only the neutral one is needed. The folder structure should look like
 
@@ -59,7 +50,14 @@ Register and download SMPL models [here](https://smpl.is.tue.mpg.de/). Put the d
 ├── ...
 └── assets/
     ├── SMPL_NEUTRAL.pkl
-```
+``` -->
+# TODO:
+1. Remove "Cai" in code
+2. Remove save txt
+2. 法向量的代码
+3. 算指标的代次
+4. 去掉split clone的数量
+5. 确保可复现 （README.md）
 
 ## :train: Training
 <!-- --- -->
@@ -87,24 +85,11 @@ bash eval_zju_mocap_refine.sh
 bash eval_monocap.sh
 ```
 
-## :love_you_gesture: Citation
+## :love_you_gesture: 
 <!-- --- -->
-
-If you find the codes of this work or the associated ReSynth dataset helpful to your research, please consider citing:
-
-```bibtex
-@article{hu2023gauhuman,
-  title={GauHuman: Articulated Gaussian Splatting from Monocular Human Videos},
-  author={Hu, Shoukang and Liu, Ziwei},
-  journal={arXiv preprint arXiv:},
-  year={2023}
-}
-```
 
 ## :newspaper_roll: License
 
-Distributed under the S-Lab License. See `LICENSE` for more information.
-
 ## :raised_hands: Acknowledgements
 
-This project is built on source codes shared by [Gaussian-Splatting](https://github.com/graphdeco-inria/gaussian-splatting), [HumanNeRF](https://github.com/chungyiweng/humannerf) and [Animatable NeRF](https://github.com/zju3dv/animatable_nerf).
+This project is built on source codes shared by [Gaussian-Splatting](https://github.com/graphdeco-inria/gaussian-splatting), [HumanNeRF](https://github.com/chungyiweng/humannerf), [GauHuman](https://github.com/skhu101/GauHuman) and [Animatable NeRF](https://github.com/zju3dv/animatable_nerf).

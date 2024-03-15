@@ -31,7 +31,6 @@ import torch.nn.functional as F
 # from gaussian_renderer import render
 from nets.mlp_delta_body_pose import BodyPoseRefiner,Autoregression
 from nets.mlp_delta_weight_lbs import LBSOffsetDecoder,CrossAttention_lbs
-from grid_put import mipmap_linear_grid_put_2d
 
 from pytorch3d.transforms import matrix_to_quaternion
  
@@ -80,8 +79,7 @@ class GaussianModel:
             neutral_smpl_path = os.path.join('assets', f'SMPL_{actor_gender.upper()}.pkl')
             self.SMPL_NEUTRAL = SMPL_to_tensor(read_pickle(neutral_smpl_path), device=self.device)
         elif smpl_type == 'smplx':
-            # neutral_smpl_path = os.path.join('assets/models/smplx', f'SMPLX_{actor_gender.upper()}.npz')
-            neutral_smpl_path = "/HOME/HOME/Caixiang/SMPLX_NEUTRAL_2020.npz"
+            neutral_smpl_path = os.path.join('assets/models/smplx', f'SMPLX_{actor_gender.upper()}.npz')
             params_init = dict(np.load(neutral_smpl_path, allow_pickle=True))
             self.SMPL_NEUTRAL = SMPL_to_tensor(params_init, device=self.device)
 
@@ -541,33 +539,7 @@ class GaussianModel:
 
         # for each gaussian point, find its nearest 2 points and return the distance
         self.kl_selected_pts_mask = self.cal_kl(kl_threshold)
-        
-        # rotation_0_q = self._rotation.detach()
-        # scaling_diag_0 = self.get_scaling.detach()
-
-        # rotation_1_q = self.origin_rotation.detach()
-        # scaling_diag_1 = self.get_origin_scaling.detach()
-
-        # kl_div = self.kl_div(self._xyz, rotation_0_q, scaling_diag_0, self._xyz, rotation_1_q, scaling_diag_1,torch.stack([rot_joint,rot_joint],dim=1).detach())
-
-        # kl_selected_pts_mask_2 =  kl_div > 0.4
-        
-        # selected_idx_mask = torch.where(torch.norm(grads, dim=-1) >= 0.0003, True, False)
-        # selected_idx_mask = torch.logical_and(selected_idx_mask,
-        #                                       torch.max(self.get_scaling, dim=1).values <= self.percent_dense*scene_extent)
-        # _, point_ids = self.knn_near_5(self._xyz[None].detach(),self._xyz[selected_idx_mask][None].detach())
-        # point_ids = torch.unique(point_ids)
-        # knn_selected_pts_mask = torch.zeros(self.kl_selected_pts_mask.shape, dtype=torch.bool,device='cuda')
-
-        # knn_selected_pts_mask[point_ids] = True
-
-        # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & knn_selected_pts_mask | kl_selected_pts_mask_2
-        # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & knn_selected_pts_mask & kl_selected_pts_mask_2
-        # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask 
-        # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & knn_selected_pts_mask
-        # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & knn_selected_pts_mask & kl_selected_pts_mask_2
-        
-        
+           
         # FIXME: normal_angle_mask
         normals = self.compute_normals_co3d(self._xyz)
         # mean_angle = compute_mean_angle(points, normals)
@@ -579,7 +551,8 @@ class GaussianModel:
         
         # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask 
         # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask | normal_angle_mask
-        selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & normal_angle_mask  # ME
+        # selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask & normal_angle_mask  # ME
+        selected_pts_mask = selected_pts_mask & self.kl_selected_pts_mask   # ME
         
         print("[kl clone]: ", (selected_pts_mask).sum().item())
 
@@ -592,19 +565,19 @@ class GaussianModel:
         rots = build_rotation(self._rotation[selected_pts_mask])  # (*,3,3)
 
         # FIXME: density rots
-        # rots = rots
+        rots = rots
         # rots = rots @ rot_joint[selected_pts_mask].reshape(-1,3,3)
-        rots = rot_joint[selected_pts_mask].reshape(-1,3,3) @ rots  # ME
+        # rots = rot_joint[selected_pts_mask].reshape(-1,3,3) @ rots  # ME
         
         new_xyz = torch.bmm(rots, samples.unsqueeze(-1)).squeeze(-1) + self.get_xyz[selected_pts_mask]
         
         # FIXME: GS scale
-        # new_scaling = self.scaling_inverse_activation(self.get_scaling[selected_pts_mask])
-        new_scaling = self.scaling_inverse_activation(self.get_scaling[selected_pts_mask] * scl_joint[selected_pts_mask])
+        new_scaling = self.scaling_inverse_activation(self.get_scaling[selected_pts_mask])
+        # new_scaling = self.scaling_inverse_activation(self.get_scaling[selected_pts_mask] * scl_joint[selected_pts_mask])
         
         # FIXME: GS rot
-        # new_rotation = self._rotation[selected_pts_mask]
-        new_rotation = matrix_to_quaternion(rot_joint[selected_pts_mask].reshape(-1,3,3)) * self._rotation[selected_pts_mask] 
+        new_rotation = self._rotation[selected_pts_mask]
+        # new_rotation = matrix_to_quaternion(rot_joint[selected_pts_mask].reshape(-1,3,3)) * self._rotation[selected_pts_mask] 
 
         new_features_dc = self._features_dc[selected_pts_mask]
         new_features_rest = self._features_rest[selected_pts_mask]
@@ -619,7 +592,7 @@ class GaussianModel:
             print("self._xyz.shape:",self._xyz.shape)
             return
         n_init_points = self.get_xyz.shape[0]
-        # Extract points that satisfy the gradient condi tion
+        # Extract points that satisfy the gradient condition
         # FIXME: Fisher
         rot_joint = torch.zeros((n_init_points,3,3), device="cuda")
         rot_joint[:grads.shape[0]] = origin_rot_joint
