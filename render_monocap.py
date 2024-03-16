@@ -1,14 +1,3 @@
-#
-# Copyright (C) 2023, Inria
-# GRAPHDECO research group, https://team.inria.fr/graphdeco
-# All rights reserved.
-#
-# This software is free for non-commercial, research and evaluation use 
-# under the terms of the LICENSE.md file.
-#
-# For inquiries contact  george.drettakis@inria.fr
-#
-
 import torch
 from scene import Scene
 import os
@@ -45,22 +34,14 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     rgbs = []
     rgbs_gt = []
     elapsed_time = 0
-    # import copy
-    # temp_view = copy.deepcopy(views[0])
+
 
     for index, view in enumerate(tqdm(views, desc="Rendering progress")):
         gt = view.original_image[0:3, :, :].cuda()
         bound_mask = view.bound_mask
         transforms, translation = smpl_rot[name][view.pose_id]['transforms'], smpl_rot[name][view.pose_id]['translation']
         
-        # new_view = views[1]
-        # view.FoVx = new_view.FoVx
-        # view.FoVy = new_view.FoVy
-        # view.world_view_transform = new_view.world_view_transform
-        # view.full_proj_transform = new_view.full_proj_transform
-        # view.camera_center = new_view.camera_center
-        # Start timer
-        # start_time = time.time()
+
         torch.cuda.synchronize()
         start_time = time.perf_counter()
         render_output = render(view, gaussians, pipeline, background, transforms=transforms, translation=translation)
@@ -148,7 +129,7 @@ if __name__ == "__main__":
     
     for iteration,data_name in zip(iteration_list,name_list):
         args.data_name = data_name
-        args.exp_name=f'/home/tom/fsas/workspace/Caixiang/MOSS/output/Monocap/my_{args.data_name}_{log_name}'
+        args.exp_name=f'/home/tom/fsas/workspace/MOSS/output/Monocap/my_{args.data_name}_{log_name}'
         args.iteration=iteration
         args.images='images'
         # args.model_path=f'output/{args.exp_name}'

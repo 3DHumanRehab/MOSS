@@ -30,9 +30,8 @@ import pickle
 import torch.nn.functional as F
 from nets.mlp_delta_body_pose import BodyPoseRefiner,Autoregression
 from nets.mlp_delta_weight_lbs import LBSOffsetDecoder,CrossAttention_lbs
-
 from pytorch3d.transforms import matrix_to_quaternion
- 
+
 class GaussianModel:
     def setup_functions(self):
         def build_covariance_from_scaling_rotation(scaling, scaling_modifier, rotation, transform=None):
@@ -85,7 +84,6 @@ class GaussianModel:
         # load knn module
         self.knn = KNN(k=1, transpose_mode=True)
         self.knn_near_2 = KNN(k=2, transpose_mode=True)
-        self.knn_near_5 = KNN(k=5, transpose_mode=True)
 
         self.motion_offset_flag = motion_offset_flag
         if self.motion_offset_flag:
@@ -284,24 +282,6 @@ class GaussianModel:
             l.append('rot_{}'.format(i))
         return l
 
-    def save_ply_with_mesh(self, path, mesh):
-        mkdir_p(os.path.dirname(path))
-
-        xyz = mesh.detach().cpu().numpy()
-        normals = np.zeros_like(xyz)
-        f_dc = self._features_dc.detach().transpose(1, 2).flatten(start_dim=1).contiguous().cpu().numpy()
-        f_rest = self._features_rest.detach().transpose(1, 2).flatten(start_dim=1).contiguous().cpu().numpy()
-        opacities = self._opacity.detach().cpu().numpy()
-        scale = self._scaling.detach().cpu().numpy()
-        rotation = self._rotation.detach().cpu().numpy()
-
-        dtype_full = [(attribute, 'f4') for attribute in self.construct_list_of_attributes()]
-
-        elements = np.empty(xyz.shape[0], dtype=dtype_full)
-        attributes = np.concatenate((xyz, normals, f_dc, f_rest, opacities, scale, rotation), axis=1)
-        elements[:] = list(map(tuple, attributes))
-        el = PlyElement.describe(elements, 'vertex')
-        PlyData([el]).write(path)
 
     def save_ply(self, path):
         mkdir_p(os.path.dirname(path))

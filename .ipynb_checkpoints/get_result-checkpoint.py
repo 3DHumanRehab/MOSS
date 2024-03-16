@@ -2,9 +2,7 @@ import numpy as np
 from glob import glob
 np.set_printoptions(suppress=True)
 
-# txt_list = glob('/HOME/HOME/Caixiang/GauHuman/result/*.txt')
 txt_list = glob('result/ZJU.txt')
-# txt_list = glob('result/monocap.txt')
 print(len(txt_list))
 
 info = True

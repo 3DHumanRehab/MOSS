@@ -200,7 +200,7 @@ class SMCReader:
               'color': HWC in bgr (uint8)
               'mask' : HW (uint8)
               'depth': HW (uint16)
-        """ 
+        """
         if not 'Mask' in self.smc:
             print("=== no key: Mask.\nplease check available keys!")
             return None  
@@ -214,7 +214,7 @@ class SMCReader:
             img_byte = self.smc['Mask'][Camera_id]['mask'][Frame_id][()]
             img_color = self.__read_color_from_bytes__(img_byte)
             img_color = np.max(img_color,2)
-            return img_color           
+            return img_color
         else:
             if Frame_id is None:
                 Frame_id_list =sorted([int(l) for l in self.smc['Mask'][Camera_id]['mask'].keys()])
@@ -233,7 +233,7 @@ class SMCReader:
                 Camera_group in ['Camera_12mp', 'Camera_5mp','Kinect'].
             Camera_id (int/str of a number):
                 CameraID (str) in 
-                    {'Camera_5mp': '0'~'47',  
+                    {'Camera_5mp': '0'~'47',
                     'Camera_12mp':'48'~'60',
                     'Kinect': '0'~'7'}
             Image_type(str) in 
@@ -248,7 +248,8 @@ class SMCReader:
               'color': HWC in bgr (uint8)
               'mask' : HW (uint8)
               'depth': HW (uint16)
-        """ 
+        """
+        
         if not Camera_group in self.smc:
             print("=== no key: %s.\nplease check available keys!" % Camera_group)
             return None

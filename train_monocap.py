@@ -304,14 +304,11 @@ if __name__ == "__main__":
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
     parser.add_argument("--test_iterations", nargs="+", type=int, default=[2500,2700,3000])
     parser.add_argument("--save_iterations", nargs="+", type=int, default=[2500,2700,3000])
-    # parser.add_argument("--test_iterations", nargs="+", type=int, default=[2000,2_200,2500,2700, 3_000,3200,3400,3600])
-    # parser.add_argument("--save_iterations", nargs="+", type=int, default=[2000,2_200,2500,2700, 3_000,3200,3400,3600])
+
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
-    #name_list = ['393'] # 1200 iter  500 Density Control  100 iter/control
 
-    # name_list = ['olek_images0812',"lan_images620_1300", "marc_images35000_36200","vlad_images1011"]
     name_list = ['olek_images0812']
     file_name = 'monocap.txt'
     save_path = f'result/{file_name}'
@@ -321,14 +318,12 @@ if __name__ == "__main__":
         print("Train on",name)
         file.write('\n'+"my_"+name+'\n')
         sys_list = ['-s', f'/home/tom/fsas/workspace/dataset/monocap/{name}', '--eval', '--exp_name', f'monocap/my_{name}_{file_name[:-4]}', '--motion_offset_flag', '--smpl_type', 'smpl', '--actor_gender', 'neutral', '--iterations', '3000']
-        #args = parser.parse_args(sys_list)
         args, _ = parser.parse_known_args(sys_list)
 
         safe_state(args.quiet)
         # Start GUI server, configure and run training
         # network_gui.init(args.ip, args.port)
         torch.autograd.set_detect_anomaly(args.detect_anomaly)
-        # training(lp.extract(argparse.Namespace(**params)), op.extract(argparse.Namespace(**params)), pp.extract(argparse.Namespace(**params)), params['test_iterations'], params['save_iterations'], params['checkpoint_iterations'], params['start_checkpoint'], params['debug_from'],file)
         training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from,file)
     # All done
     file.close()

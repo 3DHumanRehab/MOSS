@@ -1,13 +1,3 @@
-#
-# Copyright (C) 2023, Inria
-# GRAPHDECO research group, https://team.inria.fr/graphdeco
-# All rights reserved.
-#
-# This software is free for non-commercial, research and evaluation use 
-# under the terms of the LICENSE.md file.
-#
-# For inquiries contact  george.drettakis@inria.fr
-#
 
 import os
 import cv2
@@ -321,7 +311,7 @@ if __name__ == "__main__":
 
     name_list = ['377','386','387','392','393','394'] 
 
-    file_name = 'ZJU.txt'   # temp
+    file_name = 'ZJU.txt'   
     save_path = f'result/{file_name}'
     file = open(save_path, 'a')
 
@@ -336,7 +326,6 @@ if __name__ == "__main__":
         # Start GUI server, configure and run training
         # network_gui.init(args.ip, args.port)
         torch.autograd.set_detect_anomaly(args.detect_anomaly)
-        # training(lp.extract(argparse.Namespace(**params)), op.extract(argparse.Namespace(**params)), pp.extract(argparse.Namespace(**params)), params['test_iterations'], params['save_iterations'], params['checkpoint_iterations'], params['start_checkpoint'], params['debug_from'],file)
         training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from,file)
 
         

@@ -67,15 +67,8 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
 
         rgbs.append(rendering)
         rgbs_gt.append(gt)
-        
-        # FIXME: remove these codes
-        # if not index%10:
-            # gaussians.save_ply_with_mesh(os.path.join(ply_path, '{0:05d}'.format(index) + ".ply"),render_output["means3D"])
-            # gaussians.save_tensor(os.path.join(depth_path, '{0:05d}'.format(index) + ".png"),render_output["render_depth"])
-            # gaussians.save_tensor(os.path.join(alpha_path, '{0:05d}'.format(index) + ".png"),render_output["render_alpha"])
 
 
-    # Calculate elapsed time
     print("Elapsed time: ", elapsed_time, " FPS: ", len(views)/elapsed_time) 
 
     psnrs = 0.0
@@ -144,7 +137,7 @@ if __name__ == "__main__":
     
     for iteration,data_name in zip(iteration_list,name_list):
         args.data_name = data_name
-        args.exp_name=f'/home/tom/fsas/workspace/Caixiang/MOSS/output/ZJU/my_{args.data_name}'
+        args.exp_name=f'/home/tom/fsas/workspace/MOSS/output/ZJU/my_{args.data_name}'
         args.iteration=iteration
         args.images='images'
         # args.model_path=f'output/{args.exp_name}'
@@ -167,7 +160,3 @@ if __name__ == "__main__":
         safe_state(args.quiet)
 
         render_sets(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test)
-
-
-
-
