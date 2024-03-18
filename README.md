@@ -25,7 +25,6 @@
     conda install pytorch==2.0.0 torchvision==0.15.0 torchaudio==2.0.0 pytorch-cuda=11.8 -c pytorch -c nvidia -y
     pip install ninja
     pip install submodules/diff-gaussian-rasterization
-    pip install submodules/diff-gaussian-rasterization-obj
     pip install submodules/simple-knn
     pip install --upgrade https://github.com/unlimblue/KNN_CUDA/releases/download/0.2/KNN_CUDA-0.2-py3-none-any.whl
     pip install -r requirement.txt
