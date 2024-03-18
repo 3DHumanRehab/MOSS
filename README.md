@@ -69,10 +69,12 @@ tar -xzvf ZJU.tar.gz
 
 ### Train ZJU_Mocap dataset
 ```python
+# Change the path "/home/tom/fsas/workspace/dataset/ZJU_moncap" in the variable "sys_list" to the path of your ZJU_MoCap_refine dataset. refine dataset path.
 python train_ZJU.py
 ```
 Train Monocap dataset
 ```python
+# Change the path the same as ZJU.
 python train_monocap.py
 ```
 
@@ -82,7 +84,6 @@ python train_monocap.py
 ### Evaluation command on ZJU_MoCap_refine dataset
 
 ```bash
-# Change the path "/home/tom/fsas/workspace/dataset/ZJU_moncap" in the variable "sys_list" to the path of your ZJU_MoCap_refine dataset. refine dataset path.
 python render_ZJU.py
 ```
  
@@ -90,7 +91,6 @@ python render_ZJU.py
 
 ### Evaluation command on MonoCap dataset
 ```bash
-# Change the path the same as ZJU.
 python render_monocap.py
 ```
 
