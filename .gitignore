@@ -19,4 +19,4 @@ output/
 .ipynb_checkpoints/
 
 
-!assets_img/
+!assets_img/*.png
