@@ -6,8 +6,10 @@
 
 :open_book: To overcome these limitations, we introduce an innovative framework, </strong>M</strong>otion-Based 3D Cl</strong>o</strong>thed Humans </strong>S</strong>ynthe</strong>s</strong>is (</strong>MOSS</strong>), which employs kinematic information to achieve motion-aware Gaussian split on the human surface. For more visual results, go checkout our <a href="http://124.70.164.141:8082" target="_blank">project page</a>
 
+
+
 <div style="width: 70%; text-align: center; margin:auto;">
-    <img style="width:100%" src="assets_img/pipline.pdf">
+    <img src="./assets_img/pipeline.png">
     <em></em>
 </div>
 
@@ -48,7 +50,8 @@ Please follow instructions of [Instant-NVR](https://github.com/zju3dv/instant-nv
 
 ## :love_you_gesture: Checkpoint
 
-Download pre-trained model ( [ZJU_mocap]() & [Monocap]() ) and put it into the models folder.
+Download pre-trained model ( [ZJU_mocap](https://1drv.ms/u/s!AmDjVuY0E4VpcxV3HZRSAtLwA6A?e=Ynl7ov) & [Monocap](https://1drv.ms/u/s!AmDjVuY0E4VpcgQWYfwuQMJYa2c?e=MdtblL) ) and put it into the models folder.
+
 
 ```bash
 ./
@@ -60,11 +63,6 @@ Download pre-trained model ( [ZJU_mocap]() & [Monocap]() ) and put it into the m
 ```bash
 tar -xzvf ZJU.tar.gz 
 ```
-
-# TODO:
-1. Remove "Cai" in code
-2. Remove save txt
-3. 确保可复现 （README.md）
 
 ## :train: Training
 <!-- --- -->
@@ -82,15 +80,20 @@ python train_monocap.py
 <!-- --- -->
 
 ### Evaluation command on ZJU_MoCap_refine dataset
+
 ```bash
+# Change the path "/home/tom/fsas/workspace/dataset/ZJU_moncap" in the variable "sys_list" to the path of your ZJU_MoCap_refine dataset. refine dataset path.
 python render_ZJU.py
 ```
+ 
+
 
 ### Evaluation command on MonoCap dataset
 ```bash
+# Change the path the same as ZJU.
 python render_monocap.py
 ```
- 
+
 
 ## :raised_hands: Acknowledgements
 

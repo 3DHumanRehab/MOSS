@@ -17,3 +17,6 @@ screenshots
 *.pkl
 output/
 .ipynb_checkpoints/
+
+
+!assets_img/
