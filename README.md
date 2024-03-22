@@ -1,16 +1,15 @@
 <div align="center">
 
-<h1> MOSS: Motion-based 3D Clothed Human Synthesis from Monocular Video</h1>
+<h1> MOSS: Motion-based 3D Clothed Human Synthesis from <br>Monocular Video</h1>
 
  
 
-:open_book: To overcome these limitations, we introduce an innovative framework, </strong>M</strong>otion-Based 3D Cl</strong>o</strong>thed Humans </strong>S</strong>ynthe</strong>s</strong>is (</strong>MOSS</strong>), which employs kinematic information to achieve motion-aware Gaussian split on the human surface. For more visual results, go checkout our <a href="http://124.70.164.141:8082" target="_blank">project page</a>
-
+:open_book: To address the oversight of motion's influence on surface deformation in current methodologies, we introduce an innovative framework, </strong>M</strong>otion-Based 3D Cl</strong>o</strong>thed Humans </strong>S</strong>ynthe</strong>s</strong>is (</strong>MOSS</strong>), which employs kinematic information to achieve motion-aware Gaussian split on the human surface. For more visual results, go check out our <a href="http://124.70.164.141:8082" target="_blank">project page</a>.
 
 
 <div style="width: 70%; text-align: center; margin:auto;">
     <img src="./assets_img/pipeline.png">
-    <em></em>
+    <em> <b>MOSS framework.</b> MOSS rotates and zooms the Gaussians with Fisher. The T-pose is converted to the target pose and the surface folds are refined.</em>
 </div>
 
 
@@ -45,7 +44,7 @@ Register and download SMPL models here. Put the downloaded models in the folder 
 ## :newspaper_roll: Dataset
 <!-- --- -->
 
-Please follow instructions of [Instant-NVR](https://github.com/zju3dv/instant-nvr/blob/master/docs/install.md#set-up-datasets) to download ZJU-Mocap-Refine and MonoCap dataset.
+Please follow the instructions of [Instant-NVR](https://github.com/zju3dv/instant-nvr/blob/master/docs/install.md#set-up-datasets) to download ZJU-Mocap-Refine and MonoCap dataset.
 
 ## :love_you_gesture: Checkpoint
 
@@ -73,7 +72,7 @@ python train_ZJU.py
 ```
 Train Monocap dataset
 ```python
-# Change the path the same as ZJU.
+# Change the path to the same as ZJU.
 python train_monocap.py
 ```
 
@@ -86,7 +85,6 @@ python train_monocap.py
 python render_ZJU.py
 ```
  
-
 
 ### Evaluation command on MonoCap dataset
 ```bash
