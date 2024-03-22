@@ -544,28 +544,14 @@ def readCamerasZJUMoCapRefine(path, output_view, white_background, image_scaling
     
     # Highlight_debug
     
-    if True:
-        if split == 'train':
-            pose_interval = 5
-            pose_num = 100
-        elif split == 'test':
-            pose_start = 0
-            pose_interval = 30
-            pose_num = 17
-
-    else:
-        print("============================")
-        print("debug...")
-        print("============================")
-        if split == 'train':
-            pose_interval = 5
-            pose_num = 1
-        elif split == 'test':
-            pose_start = 0
-            pose_interval = 30
-            pose_num = 17
-
-        
+    if split == 'train':
+        pose_interval = 5
+        pose_num = 100
+    elif split == 'test':
+        pose_start = 0
+        pose_interval = 30
+        pose_num = 17
+         
     if split == 'test' and ('377' or '392' in path):
         # output_view = np.delete(cam_inds,2,axis=1)
         output_view.remove(3)
