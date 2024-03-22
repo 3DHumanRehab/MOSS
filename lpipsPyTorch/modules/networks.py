@@ -8,7 +8,6 @@ from torchvision import models
 
 from .utils import normalize_activation
 
-
 def get_network(net_type: str):
     if net_type == 'alex':
         return AlexNet()

@@ -116,3 +116,4 @@ def RGB2SH(rgb):
 
 def SH2RGB(sh):
     return sh * C0 + 0.5
+

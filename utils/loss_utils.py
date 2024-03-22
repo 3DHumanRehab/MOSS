@@ -14,7 +14,6 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from math import exp
 
-
 def s3im_fun(src_vec, tar_vec,repeat_time=10):
     #     r"""Implements Stochastic Structural SIMilarity(S3IM) algorithm.
     #     It is proposed in the ICCV2023 paper  
