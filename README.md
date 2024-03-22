@@ -4,7 +4,7 @@
 
  
 
-:open_book: To address the oversight of motion's influence on surface deformation in current methodologies, we introduce an innovative framework, </strong>M</strong>otion-Based 3D Cl</strong>o</strong>thed Humans </strong>S</strong>ynthe</strong>s</strong>is (</strong>MOSS</strong>), which employs kinematic information to achieve motion-aware Gaussian split on the human surface. For more visual results, go check out our <a href="http://124.70.164.141:8082" target="_blank">project page</a>.
+:open_book: To address the oversight of motion's influence on surface deformation in current methodologies, we introduce an innovative framework, </strong>M</strong>otion-Based 3D Cl</strong>o</strong>thed Humans </strong>S</strong>ynthe</strong>s</strong>is (</strong>MOSS</strong>), which employs kinematic information to achieve motion-aware Gaussian split on the human surface. For more visual results, please check out our <a href="http://124.70.164.141:8082" target="_blank">project page</a>.
 
 
 <div style="width: 70%; text-align: center; margin:auto;">
